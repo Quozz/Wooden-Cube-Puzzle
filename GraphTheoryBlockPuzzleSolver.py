@@ -13,7 +13,7 @@ This is a temporary script file.
 """
 import random as random
 import numpy as np
-#import math as math
+import math as math
 #import matplotlib.pyplot as plt
 import pickle as pickle
 import time as time
@@ -231,7 +231,7 @@ def GenerateGraphEV():
         for j in range(i):
             if Overlap(Shapes[i],Shapes[j], CubeSize):
                 E.append((i,j))
-    V = range(len(Shapes))
+    V = list(range(len(Shapes)))
     with open('saved_edges.pkl', 'wb') as f:
         pickle.dump(E, f)
     with open('saved_vertices.pkl', 'wb') as f:
@@ -261,6 +261,8 @@ def GenerateGraphArray(E,V):
         pickle.dump(GraphArray,f)
     return GraphArray
 
+def InitializeAges():
+    return 0
 
 def InitializeEdgeWeights():
     return 0
@@ -279,19 +281,65 @@ def FindUnCoveredEdges(E,C):
     UnCoveredEdges = [] 
     return UnCoveredEdges
 
-def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime):
-    InitializeEdgeWeights()
-    InitializeDScores()
-    InitializeConfChange()
-    C = ConstructC()
-    Cperp = [Vertex for Vertex in V if not Vertex in C]
-    Cover = C
-    UnCoveredEdge = []
+#Sort S according to dscore from low to high. The elements with the maximum
+#dscore Should be sorted according to age. 
+def SortD(C):
+    return C
+
+def UpdateUnCoveredEdges(UnCoveredEdges, Vertex,C,V):
+    return UnCoveredEdges
+
+
+#Insert a vertex so that the list remains ordered
+def InsertVertexToC(Vertex,C, DscoresDict, Ages):
+    return C
+
+#Calculate the Average Outcome of a Dictionary
+def CalcAverage(Dictionary):
+    Average = 0
+    return Average
+
+def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate):
+    EdgeWeightsDict = InitializeEdgeWeights()
+    DScoresDict = InitializeDScores()
+    ConfChangeDict = InitializeConfChange()
+    Ages = InitializeAges()
+    C = SortD(V)
+    CompC = []
+    #Alternatively
+    #C = ConstructC()
+    #CompC = [Vertex for Vertex in V if not Vertex in C] #O(VC)
     
+    Cover = C
+    UnCoveredEdges = []
+    Counter = 0
     InitialTime = time.time()
     while time.time() - InitialTime < CutOffTime:
-        continue
+        if not UnCoveredEdges:
+            Cover = C
+            C.pop(-1)
+            continue
+        Vertex = C.pop(-1)
+        ConfChangeDict[Vertex] = 0
+        for Neighbour in NeighbourDict[Vertex]:
+            ConfChangeDict[Neighbour] = 1
+        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,C,V)
+        Edge = random.choice(UnCoveredEdges) #Should Be Weighted Choice
+        ReducedEdge = (Edge for Vertex in Edge if ConfChangeDict[Vertex])
+        SortD(ReducedEdge)
+        Vertex = ReducedEdge[-1]
+        InsertVertexToC(Vertex,C, DScoresDict, Ages)
+        for Neighbour in NeighbourDict[Vertex]:
+            ConfChangeDict[Neighbour] = 1        
+        for Edge in UnCoveredEdges:
+            EdgeWeightsDict[Edge] = EdgeWeightsDict[Edge] + 1
+        W = CalcAverage(EdgeWeightsDict)
+        if W > WeightLimit:
+            for Edge in E:
+                EdgeWeightsDict[Edge] = math.ceil(EdgeWeightsDict[Edge]*WeightLossRate)
+    return Cover
         
+
 
     
 
@@ -328,19 +376,25 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime):
     """
     
 def main():
+    WeightLimit = 100
+    WeightLossRate = 0.5
+    CutOffTime = 1
+    
+    
     with open('saved_edges.pkl', 'rb') as f:
         E = pickle.load(f)
     with open('saved_vertices.pkl', 'rb') as f:
         V = pickle.load(f)
+        
     with open('NeighbourDict.pkl', 'rb') as f:
         NeighbourDict = pickle.load(f)
     with open('GraphArray.pkl', 'rb') as f:
         GraphArray = pickle.load(f)
     #duration of algorithm in seconds
-    CutOffTime = 1
-    NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime)
+    print(type(V))
+    NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
     
-    
+
 if __name__ == "__main__":
     main()
 
