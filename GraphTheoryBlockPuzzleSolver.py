@@ -16,6 +16,7 @@ import numpy as np
 #import math as math
 #import matplotlib.pyplot as plt
 import pickle as pickle
+import time as time
 
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
 #Whether it is equal(2) to Possibility 2
@@ -206,8 +207,8 @@ def NumberOfCombinations():
         NCR = NCR *(768 - i)/(i+1)
         NCR = NCR**2
     return NCR
-NumberOfCombinations()
-def GenerateGraph():
+
+def GenerateGraphEV():
     
     CubeSize = 5
     ShapeL,ShapeY = GenerateBaseShapes()
@@ -237,64 +238,109 @@ def GenerateGraph():
         pickle.dump(V, f)
     with open('saved_shapes.pkl', 'wb') as f:
         pickle.dump(Shapes, f)   
+
+#Constructs graph dictionary from lists E,V with V immutable entries
+def GenerateNeighbourDictionary(E,V):
+    NeighbourDict = {}
+    for i in V:
+        NeighbourDict[i] = []
+    for i,j in E:
+        NeighbourDict[i] = NeighbourDict[i] + [j]
+        NeighbourDict[j] = NeighbourDict[j] + [i]
+    with open('NeighbourDict.pkl', 'wb') as f:
+        pickle.dump(NeighbourDict,f)
+    return NeighbourDict
+
+def GenerateGraphArray(E,V):
+    GraphArray = np.zeros((len(V),len(V)))
+    for i,j in E:
+        GraphArray[i,j] = 1
+        GraphArray[j,i] = 1
+    np.fill_diagonal(GraphArray,1)
+    with open('GraphArray.pkl', 'wb') as f:
+        pickle.dump(GraphArray,f)
+    return GraphArray
+
+
+def InitializeEdgeWeights():
+    return 0
+
+def InitializeDScores():
+    return 0
+
+def InitializeConfChange():
+    return 0
+
+def ConstructC():
+    C = []
+    return C
+
+def FindUnCoveredEdges(E,C):
+    UnCoveredEdges = [] 
+    return UnCoveredEdges
+
+def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime):
+    InitializeEdgeWeights()
+    InitializeDScores()
+    InitializeConfChange()
+    C = ConstructC()
+    Cperp = [Vertex for Vertex in V if not Vertex in C]
+    Cover = C
+    UnCoveredEdge = []
     
+    InitialTime = time.time()
+    while time.time() - InitialTime < CutOffTime:
+        continue
+        
+
+    
+
+    
+    #In this code, we build two global objects. The ConfigurationTracker tracks
+    #the configurations used to build blocks. The Cube tracks which locations
+    #contain blocks. We try to add blocks until all blocks are contained in the
+    #Cube. Then the functions and loops should end. 
+    """
+    (G,cutoff)
+    Input: graph G = (V,E), the cutoff time
+    Output: vertex cover of G
+    2 begin
+    3 initialize edge weights and dscores of vertices;
+    4 initialize the confChange array as an all-1 array;
+    5 construct C greedily until it is a vertex cover;
+    6 C∗ := C;
+    7 while elapsed time < cutoff do
+    8   if there is no uncovered edge then
+    9   C∗ := C;
+    10  remove a vertex with the highest dscore from C;
+    11  continue;
+    12 choose a vertex u ∈ C with the highest dscore, breaking ties in favor of the oldest
+    one;
+    13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1 for each z ∈ N(u);
+    14 choose an uncovered edge e randomly;
+    15 choose a vertex v ∈ e such that confChange(v) = 1 with higher dscore, breaking ties
+    in favor of the older one;
+    16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);
+    17 w(e) := w(e) + 1 for each uncovered edge e;
+    18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e;
+    19 return C∗;
+    20 end
+    """
     
 def main():
     with open('saved_edges.pkl', 'rb') as f:
         E = pickle.load(f)
     with open('saved_vertices.pkl', 'rb') as f:
         V = pickle.load(f)
-    print('length E', len(E))
-    print('length V', len(V))
+    with open('NeighbourDict.pkl', 'rb') as f:
+        NeighbourDict = pickle.load(f)
+    with open('GraphArray.pkl', 'rb') as f:
+        GraphArray = pickle.load(f)
+    #duration of algorithm in seconds
+    CutOffTime = 1
+    NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime)
     
-    #In this code, we build two global objects. The ConfigurationTracker tracks
-    #the configurations used to build blocks. The Cube tracks which locations
-    #contain blocks. We try to add blocks until all blocks are contained in the
-    #Cube. Then the functions and loops should end. 
     
-    """
-    for i in range(10):
-        Cube,Locations = GenerateCube(5)
-        ShapeLocations = random.sample(ShapeLLocations,6) + random.sample(ShapeYLocations,6)
-        for ShapeLocation in ShapeLocations:
-            AddShapeToCube(Cube,ShapeLocation)
-        Energies = []
-        Energy = EnergyFunction(Cube)
-        Energies.append(Energy)
-        MinEnergy = Energy
-        BestShapeLocations = ShapeLocations
-        Tmax = 20
-        T = Tmax
-        DecayRate = 0.0001
-        Tmin = 0.1
-        Once = 1
-        while T > Tmin:
-            EnergyDifference,ShapeAdded,ShapeRemoved, ShapeIndex = Neighbour(ShapeLocations,Cube, CubeRotations)
-            if ShapeAdded:
-                if EnergyDifference > 0 and random.random() > math.exp(-EnergyDifference/T):
-                    EnergyDifference += AddShapeToCube(Cube,ShapeRemoved)
-                    EnergyDifference += RemoveShapeFromCube(Cube,ShapeAdded)
-                else:
-                    del ShapeLocations[ShapeIndex]
-                    ShapeLocations.append(ShapeAdded)
-                    Energy = Energy + EnergyDifference
-                    Energies.append(Energy)
-                    if MinEnergy > Energy:
-                        BestShapeLocations = ShapeLocations
-                        BestCube = Cube
-                    MinEnergy = min(MinEnergy,Energy)
-                T = T*(1-DecayRate)
-                if Once and T < 1:
-                    Once = 0
-                    DecayRate = DecayRate/4
-                if CheckCubeConsistency(Cube, Locations):
-                    print('Cube Solved')
-                    break
-        print(BestCube, MinEnergy, BestShapeLocations)
-        plt.plot(Energies)
-        plt.ylabel('Energy')
-        plt.show()         
-    """
 if __name__ == "__main__":
     main()
 
