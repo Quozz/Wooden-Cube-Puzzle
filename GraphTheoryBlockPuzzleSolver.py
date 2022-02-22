@@ -285,8 +285,9 @@ def FindUnCoveredEdges(E,C):
 #dscore Should be sorted according to age. 
 def SortD(C):
     return C
-
-def UpdateUnCoveredEdges(UnCoveredEdges, Vertex,C,V):
+#Updates the UnCoveredEdges set After Adding (Added = 1) or removing (Added = 0)
+#A vertex
+def UpdateUnCoveredEdges(UnCoveredEdges, Vertex, Added, C,V):
     return UnCoveredEdges
 
 
@@ -317,13 +318,14 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     while time.time() - InitialTime < CutOffTime:
         if not UnCoveredEdges:
             Cover = C
-            C.pop(-1)
+            Vertex = C.pop(-1)
+            UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V)
             continue
         Vertex = C.pop(-1)
         ConfChangeDict[Vertex] = 0
         for Neighbour in NeighbourDict[Vertex]:
             ConfChangeDict[Neighbour] = 1
-        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,C,V)
+        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V)
         Edge = random.choice(UnCoveredEdges) #Should Be Weighted Choice
         ReducedEdge = (Edge for Vertex in Edge if ConfChangeDict[Vertex])
         SortD(ReducedEdge)
@@ -331,6 +333,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         InsertVertexToC(Vertex,C, DScoresDict, Ages)
         for Neighbour in NeighbourDict[Vertex]:
             ConfChangeDict[Neighbour] = 1        
+        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V)
         for Edge in UnCoveredEdges:
             EdgeWeightsDict[Edge] = EdgeWeightsDict[Edge] + 1
         W = CalcAverage(EdgeWeightsDict)
