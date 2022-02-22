@@ -13,8 +13,8 @@ This is a temporary script file.
 """
 import random as random
 import numpy as np
-import math as math
-import matplotlib.pyplot as plt
+#import math as math
+#import matplotlib.pyplot as plt
 import pickle as pickle
 
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
