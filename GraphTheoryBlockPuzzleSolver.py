@@ -17,7 +17,8 @@ import math as math
 #import matplotlib.pyplot as plt
 import pickle as pickle
 import time as time
-
+import os 
+dir_path = os.path.dirname(os.path.realpath(__file__))
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
 #Whether it is equal(2) to Possibility 2
 def GreaterThan(Possibility1,Possibility2):
@@ -261,17 +262,29 @@ def GenerateGraphArray(E,V):
         pickle.dump(GraphArray,f)
     return GraphArray
 
-def InitializeAges():
-    return 0
+def InitializeAges(V):
+    AgeDict = {}
+    for Vertex in V:
+        AgeDict[Vertex] = 0
+    return AgeDict
 
-def InitializeEdgeWeights():
-    return 0
+def InitializeEdgeWeights(E):
+    EdgeWeightsDict = {}
+    for edge in E:
+        EdgeWeightsDict[edge] = 1
+    return EdgeWeightsDict
 
-def InitializeDScores():
-    return 0
+def InitializeDScores(V):
+    DScores = {}
+    for Vertex in V:
+        DScores[Vertex] = 0
+    return DScores
 
-def InitializeConfChange():
-    return 0
+def InitializeConfChange(V):
+    ConfChangeDict = {}
+    for Vertex in V:
+        ConfChangeDict[Vertex] = bool(1)
+    return ConfChangeDict
 
 def ConstructC():
     C = []
@@ -301,11 +314,11 @@ def CalcAverage(Dictionary):
     return Average
 
 def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate):
-    EdgeWeightsDict = InitializeEdgeWeights()
-    DScoresDict = InitializeDScores()
-    ConfChangeDict = InitializeConfChange()
-    Ages = InitializeAges()
-    C = SortD(V)
+    EdgeWeightsDict = InitializeEdgeWeights(E)
+    DScoresDict = InitializeDScores(V)
+    ConfChangeDict = InitializeConfChange(V)
+    AgeDict = InitializeAges(V)
+    C = V #If DScoresDict is not uniform, V needs to be sorted
     CompC = []
     #Alternatively
     #C = ConstructC()
@@ -313,10 +326,24 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     
     Cover = C
     UnCoveredEdges = []
-    Counter = 0
+    CounterLoop = 0
+    CounterComplete = 0
+    
     InitialTime = time.time()
     while time.time() - InitialTime < CutOffTime:
+        CounterLoop += 1
+        for Edge in E:
+            assert isinstance(EdgeWeightsDict[Edge], int)
+            assert isinstance(Edge,tuple)
+        for Vertex in V:
+            assert isinstance(DScoresDict[Vertex], int) 
+            assert isinstance(ConfChangeDict[Vertex], bool) 
+            assert isinstance(AgeDict[Vertex], int)  
+            assert isinstance(Vertex, int)
         if not UnCoveredEdges:
+            if not C:
+                print(time.time() - InitialTime)
+                break
             Cover = C
             Vertex = C.pop(-1)
             UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V)
@@ -330,7 +357,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         ReducedEdge = (Edge for Vertex in Edge if ConfChangeDict[Vertex])
         SortD(ReducedEdge)
         Vertex = ReducedEdge[-1]
-        InsertVertexToC(Vertex,C, DScoresDict, Ages)
+        InsertVertexToC(Vertex,C, DScoresDict, AgeDict)
         for Neighbour in NeighbourDict[Vertex]:
             ConfChangeDict[Neighbour] = 1        
         UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V)
@@ -340,6 +367,8 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         if W > WeightLimit:
             for Edge in E:
                 EdgeWeightsDict[Edge] = math.ceil(EdgeWeightsDict[Edge]*WeightLossRate)
+        CounterComplete += 1
+    print('CounterLoop', CounterLoop, '\n', 'CounterComplete', CounterComplete)
     return Cover
         
 
@@ -394,7 +423,6 @@ def main():
     with open('GraphArray.pkl', 'rb') as f:
         GraphArray = pickle.load(f)
     #duration of algorithm in seconds
-    print(type(V))
     NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
     
 
