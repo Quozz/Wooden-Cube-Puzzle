@@ -18,6 +18,7 @@ import math as math
 import pickle as pickle
 import time as time
 import os 
+import copy as copy
 dir_path = os.path.dirname(os.path.realpath(__file__))
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
 #Whether it is equal(2) to Possibility 2
@@ -296,14 +297,42 @@ def FindUnCoveredEdges(E,C):
 
 #Sort S according to dscore from low to high. The elements with the maximum
 #dscore Should be sorted according to age. 
-def SortD(C):
-    return C
+def SortD(C, DScoresDict, Reverse):
+    DScores = []
+    for Vertex in C:
+        DScores.append(DScoresDict[Vertex])
+    CNew = [Vertex for (DScore,Vertex) in sorted(zip(DScores,C), key=lambda pair: pair[0], reverse = Reverse)]
+    return CNew
+
 #Updates the UnCoveredEdges set After Adding (Added = 1) or removing (Added = 0)
 #A vertex
-def UpdateUnCoveredEdges(UnCoveredEdges, Vertex, Added, C,V):
+def UpdateUnCoveredEdges(UnCoveredEdges, Vertex, Added, C ,V, NeighbourDict):
+    if Added:
+        NewUncoveredEdges = []
+        for Edge in UnCoveredEdges:
+            if not Vertex in Edge:
+                NewUncoveredEdges.append(Edge)
+        return NewUncoveredEdges
+                
+    else: 
+        for Vertex2 in NeighbourDict[Vertex]:
+            if Vertex2 not in C: #Takes Quite Long, improved by CComp
+                assert not Vertex == Vertex2
+                Edge = tuple(sorted((Vertex,Vertex2), reverse = True))
+                assert isinstance(Edge,tuple)
+                assert not Edge in UnCoveredEdges 
+#                print(Edge)
+                UnCoveredEdges.append(Edge)
     return UnCoveredEdges
 
+def UpdateEdgeWeightsDict(EdgeWeightsDict, UnCoveredEdges):
+    return 0
 
+def UpdateDScore():
+    return 0
+
+
+sorted((2,1))
 #Insert a vertex so that the list remains ordered
 def InsertVertexToC(Vertex,C, DscoresDict, Ages):
     return C
@@ -318,58 +347,79 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     DScoresDict = InitializeDScores(V)
     ConfChangeDict = InitializeConfChange(V)
     AgeDict = InitializeAges(V)
-    C = V #If DScoresDict is not uniform, V needs to be sorted
-    CompC = []
+    C = copy.deepcopy(V) #If DScoresDict is not uniform, V needs to be sorted
+    CComp = []
     #Alternatively
     #C = ConstructC()
     #CompC = [Vertex for Vertex in V if not Vertex in C] #O(VC)
     
     Cover = C
     UnCoveredEdges = []
-    CounterLoop = 0
-    CounterComplete = 0
+    CounterStart = 0
+    CounterEnd = 0
+    CoverCounter = 0
     
     InitialTime = time.time()
     while time.time() - InitialTime < CutOffTime:
-        CounterLoop += 1
+        CounterStart += 1
+        """
         for Edge in E:
             assert isinstance(EdgeWeightsDict[Edge], int)
             assert isinstance(Edge,tuple)
+            assert len(Edge) == 2
         for Vertex in V:
             assert isinstance(DScoresDict[Vertex], int) 
             assert isinstance(ConfChangeDict[Vertex], bool) 
             assert isinstance(AgeDict[Vertex], int)  
             assert isinstance(Vertex, int)
+        """
         if not UnCoveredEdges:
             if not C:
                 print(time.time() - InitialTime)
                 break
             Cover = C
             Vertex = C.pop(-1)
-            UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V)
+            print(Vertex)
+            UpdateUnCoveredEdges(UnCoveredEdges, Vertex,0,C,V,NeighbourDict)
+            UpdateEdgeWeightsDict() #ToWrite
+            UpdateDScore()
+            CoverCounter += 1
             continue
         Vertex = C.pop(-1)
-        ConfChangeDict[Vertex] = 0
+        ConfChangeDict[Vertex] = bool(0)
         for Neighbour in NeighbourDict[Vertex]:
-            ConfChangeDict[Neighbour] = 1
-        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V)
-        Edge = random.choice(UnCoveredEdges) #Should Be Weighted Choice
-        ReducedEdge = (Edge for Vertex in Edge if ConfChangeDict[Vertex])
-        SortD(ReducedEdge)
-        Vertex = ReducedEdge[-1]
+            ConfChangeDict[Neighbour] = bool(1)
+        
+        print('before',len(UnCoveredEdges))
+        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V, NeighbourDict)
+        UpdateEdgeWeightsDict() #ToWrite
+        UpdateDScore()
+        Edge = random.choice(UnCoveredEdges)
+        ReducedEdge = ()
+        for Vertex in Edge:
+            if ConfChangeDict[Vertex]:
+                ReducedEdge = ReducedEdge + (Vertex,)
+#        ReducedEdge = (Vertex for Vertex in Edge if ConfChangeDict[Vertex])
+        SortD(ReducedEdge, DScoresDict, Reverse = True)
+        Vertex = ReducedEdge[0]
         InsertVertexToC(Vertex,C, DScoresDict, AgeDict)
         for Neighbour in NeighbourDict[Vertex]:
-            ConfChangeDict[Neighbour] = 1        
-        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V)
+            ConfChangeDict[Neighbour] = bool(1)        
+        print('Mid',len(UnCoveredEdges))
+        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V, NeighbourDict)
+        UpdateEdgeWeightsDict() #ToWrite
+        UpdateDScore()
         for Edge in UnCoveredEdges:
+            assert isinstance(Edge, tuple)
             EdgeWeightsDict[Edge] = EdgeWeightsDict[Edge] + 1
         W = CalcAverage(EdgeWeightsDict)
         if W > WeightLimit:
             for Edge in E:
                 EdgeWeightsDict[Edge] = math.ceil(EdgeWeightsDict[Edge]*WeightLossRate)
-        CounterComplete += 1
-    print('CounterLoop', CounterLoop, '\n', 'CounterComplete', CounterComplete)
-    return Cover
+        CounterEnd += 1
+        print('End',len(UnCoveredEdges))
+    print('CounterStart', CounterStart, '\n', 'CounterEnd', CounterEnd, '\n CoverCounter', CoverCounter)
+    return Cover,C,UnCoveredEdges
         
 
 
@@ -410,22 +460,24 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
 def main():
     WeightLimit = 100
     WeightLossRate = 0.5
-    CutOffTime = 1
+    CutOffTime = 0.05
     
     
     with open('saved_edges.pkl', 'rb') as f:
         E = pickle.load(f)
     with open('saved_vertices.pkl', 'rb') as f:
         V = pickle.load(f)
-        
     with open('NeighbourDict.pkl', 'rb') as f:
         NeighbourDict = pickle.load(f)
     with open('GraphArray.pkl', 'rb') as f:
         GraphArray = pickle.load(f)
+        
     #duration of algorithm in seconds
-    NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
-    
-
+    Cover,C,UnCoveredEdges = NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
+    CComp = [Vertex for Vertex in V if not Vertex in C]
+    print(CComp)
+    print(C==V)
+    print(len(UnCoveredEdges))
 if __name__ == "__main__":
     main()
 
