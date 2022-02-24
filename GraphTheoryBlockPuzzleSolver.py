@@ -19,6 +19,7 @@ import pickle as pickle
 import time as time
 import os 
 import copy as copy
+import pandas as pd
 dir_path = os.path.dirname(os.path.realpath(__file__))
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
 #Whether it is equal(2) to Possibility 2
@@ -306,7 +307,7 @@ def SortD(C, DScoresDict, Reverse):
 
 #Updates the UnCoveredEdges set After Adding (Added = 1) or removing (Added = 0)
 #A vertex
-def UpdateUnCoveredEdges(UnCoveredEdges, Vertex, Added, C ,V, NeighbourDict):
+def UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, Added = 0):
     if Added:
         NewUncoveredEdges = []
         for Edge in UnCoveredEdges:
@@ -316,11 +317,10 @@ def UpdateUnCoveredEdges(UnCoveredEdges, Vertex, Added, C ,V, NeighbourDict):
                 
     else: 
         for Vertex2 in NeighbourDict[Vertex]:
-            if Vertex2 not in C: #Takes Quite Long, improved by CComp
+            if Vertex2 in VDataFrame['In C'] == 0:
                 assert not Vertex == Vertex2
                 Edge = tuple(sorted((Vertex,Vertex2), reverse = True))
-                assert isinstance(Edge,tuple)
-                assert not Edge in UnCoveredEdges 
+#                assert not Edge in UnCoveredEdges 
 #                print(Edge)
                 UnCoveredEdges.append(Edge)
     return UnCoveredEdges
@@ -343,18 +343,28 @@ def CalcAverage(Dictionary):
     return Average
 
 def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate):
-    EdgeWeightsDict = InitializeEdgeWeights(E)
-    DScoresDict = InitializeDScores(V)
-    ConfChangeDict = InitializeConfChange(V)
-    AgeDict = InitializeAges(V)
-    C = copy.deepcopy(V) #If DScoresDict is not uniform, V needs to be sorted
-    CComp = []
+    VDataFrame = pd.DataFrame(V, columns = ['Vertex'])
+    VDataFrame.Vertex.astype(int)
+    VDataFrame['In C'] = bool(1)
+    #    EdgeWeightsDict = InitializeEdgeWeights(E)
+    #    DScoresDict = InitializeDScores(V)
+    #    ConfChangeDict = InitializeConfChange(V)
+    #    AgeDict = InitializeAges(V)
+    VDataFrame['DScore'] = int(0) 
+
+    VDataFrame['ConfChange'] = bool(1)
+    VDataFrame['Age'] = int(0)
+    
+    EDataFrame = pd.DataFrame(E, columns = ['Vertex1', 'Vertex2'])
+    EDataFrame['Covered'] = bool(0)
+    EDataFrame['Weight'] = int(1)
+
+    #C = copy.deepcopy(V) #If DScoresDict is not uniform, V needs to be sorted
     #Alternatively
     #C = ConstructC()
     #CompC = [Vertex for Vertex in V if not Vertex in C] #O(VC)
     
-    Cover = C
-    UnCoveredEdges = []
+    CoverDataFrame = copy.deepcopy(VDataFrame)
     CounterStart = 0
     CounterEnd = 0
     CoverCounter = 0
@@ -362,26 +372,32 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     InitialTime = time.time()
     while time.time() - InitialTime < CutOffTime:
         CounterStart += 1
-        """
-        for Edge in E:
-            assert isinstance(EdgeWeightsDict[Edge], int)
-            assert isinstance(Edge,tuple)
-            assert len(Edge) == 2
-        for Vertex in V:
-            assert isinstance(DScoresDict[Vertex], int) 
-            assert isinstance(ConfChangeDict[Vertex], bool) 
-            assert isinstance(AgeDict[Vertex], int)  
-            assert isinstance(Vertex, int)
-        """
-        if not UnCoveredEdges:
-            if not C:
+        
+        for Vertex in EDataFrame['Vertex1']:
+            assert isinstance(Vertex,int)
+        for Vertex in EDataFrame['Vertex2']:
+            assert isinstance(Vertex,int)
+        for Weight in EDataFrame['Weight']:
+            assert isinstance(Weight,int) 
+        for Vertex in VDataFrame['Vertex']:
+            assert isinstance(Vertex, int) 
+        for Bool in VDataFrame['In C']:
+            assert isinstance(Bool, bool)     
+        for DScore in VDataFrame['DScore']:
+            assert isinstance(DScore,int)
+        for ConfChange in VDataFrame['ConfChange']:
+            assert isinstance(ConfChange,bool)
+        for Age in VDataFrame['Age']:
+            assert isinstance(Age, int)  
+        
+        if EDataFrame['Covered'].all:
+            if not VDataFrame.any:
                 print(time.time() - InitialTime)
                 break
-            Cover = C
-            Vertex = C.pop(-1)
-            print(Vertex)
-            UpdateUnCoveredEdges(UnCoveredEdges, Vertex,0,C,V,NeighbourDict)
-            UpdateEdgeWeightsDict() #ToWrite
+            Cover = copy.deepcopy(VDataFrame)
+            VDataFrame.loc[0,'In C'] = bool(0)
+            UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, Added = 0)
+            UpdateEdgeWeightsDict(EdgeWeightsDict,UnCoveredEdges) #ToWrite
             UpdateDScore()
             CoverCounter += 1
             continue
@@ -392,7 +408,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         
         print('before',len(UnCoveredEdges))
         UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V, NeighbourDict)
-        UpdateEdgeWeightsDict() #ToWrite
+        UpdateEdgeWeightsDict(EdgeWeightsDict,UnCoveredEdges) #ToWrite
         UpdateDScore()
         Edge = random.choice(UnCoveredEdges)
         ReducedEdge = ()
@@ -407,7 +423,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
             ConfChangeDict[Neighbour] = bool(1)        
         print('Mid',len(UnCoveredEdges))
         UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V, NeighbourDict)
-        UpdateEdgeWeightsDict() #ToWrite
+        UpdateEdgeWeightsDict(EdgeWeightsDict, UnCoveredEdges) #ToWrite
         UpdateDScore()
         for Edge in UnCoveredEdges:
             assert isinstance(Edge, tuple)
@@ -422,10 +438,12 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     return Cover,C,UnCoveredEdges
         
 
-
-    
-
-    
+for row in VDataFrame:
+    print(row)
+print(~bool(1))
+not EDataFrame['Covered'].any
+print('True')
+print(UnCovered.all())
     #In this code, we build two global objects. The ConfigurationTracker tracks
     #the configurations used to build blocks. The Cube tracks which locations
     #contain blocks. We try to add blocks until all blocks are contained in the
