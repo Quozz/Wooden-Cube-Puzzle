@@ -16,11 +16,10 @@ import numpy as np
 import math as math
 #import matplotlib.pyplot as plt
 import pickle as pickle
-import time as time
-import os 
+import time as time 
 import copy as copy
 import pandas as pd
-dir_path = os.path.dirname(os.path.realpath(__file__))
+
 #GreaterThan checks if a sequence of 'digits' Possibility1 is ordered after (1) before (0) or 
 #Whether it is equal(2) to Possibility 2
 def GreaterThan(Possibility1,Possibility2):
@@ -36,7 +35,6 @@ def GreaterThan(Possibility1,Possibility2):
     return 2
 
 
-Tries = 0
 ###
 #Generate a list of all 24 proper rotations that are symmetries of the cube as 
 #np arrays representing linear transformation matrices
@@ -144,7 +142,7 @@ def EnergyFunction(Cube):
 #After applying this function, this allows the change to be reverted
 #This function can calculate the energy difference faster than
 #The energy function
-def Neighbour(ShapeLocations,Cube,Rotations):
+def SelectNeighbour(ShapeLocations,Cube,Rotations):
     #For now, we only allow translations
     ShapeRemovedIndex  = random.choice(range(len(ShapeLocations)))
     ShapeRemoved = ShapeLocations[ShapeRemovedIndex]
@@ -304,45 +302,180 @@ def SortD(C, DScoresDict, Reverse):
         DScores.append(DScoresDict[Vertex])
     CNew = [Vertex for (DScore,Vertex) in sorted(zip(DScores,C), key=lambda pair: pair[0], reverse = Reverse)]
     return CNew
-
 #Updates the UnCoveredEdges set After Adding (Added = 1) or removing (Added = 0)
 #A vertex
-def UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, Added = 0):
+
+def FindEdgeIndex(Vertex1,Vertex2, EdgeIndexDict):
+    assert Vertex1 != Vertex2
+    Vertex1,Vertex2 = tuple(sorted((Vertex1,Vertex2), reverse = True))
+    EdgeIndex = EdgeIndexDict[(Vertex1,Vertex2)]
+    return EdgeIndex
+
+
+def UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, EdgeIndexDict, Added):
+#    print('vertex updated',Vertex)
+    assert VDataFrame.at[Vertex,'In C'] == Added
+    for Vertex2 in NeighbourDict[Vertex]:
+        if VDataFrame.at[Vertex2, 'In C'] == 0:
+            assert not Vertex == Vertex2
+            VertexHigh,VertexLow = sorted((Vertex,Vertex2), reverse = True)
+            Index = EdgeIndexDict[VertexHigh,VertexLow] 
+            """
+            print('Edge', (EDataFrame.at[Index,'Vertex1'],
+                           EDataFrame.at[Index,'Vertex2']),
+                  '\n Covered', EDataFrame.at[Index,'Covered'], 
+                  '\n Added', Added,
+                  '\n VertexHigh,  VertexLow, Vertex, Vertex2',
+                  VertexHigh, VertexLow, Vertex, Vertex2)
+            """
+            assert EDataFrame.at[Index,'Covered'] == 1 - Added
+            EDataFrame.at[Index,'Covered'] = bool(Added)
+    return EDataFrame
+
+def UpdateEdgeWeights(EdgeWeightsDict, UnCoveredEdges):
+    return 0
+
+#Time: ~37 seconds, i.e. Extremely Long
+def GloballyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict):
+    #Update DScore for Vertex 
+    #The DScore of the vertex is the difference in cost when you flip the dict
+    #Between C and Complement C. 
+    #The cost is a function of the graph G and C, and consists of 
+    #The sum of all weights of all edges not covered by C. 
+    #When a Vertex is not in C, adding it to C covers edges, therefore it flipping
+    #it decreases the cost, and therefore has a positive DScore. The Vertex with
+    #The maximum DScore should be flipped to ensure minimum cost
+    #DScore. When a vertex is in C it uncovers edges, and hence
+    #it has a negative DScore. The least negative DScore, i.e. the maximum DScore
+    #Should be chosen in order to get a minimum Cost
+    #One way to calculate the DScore is to calculate the cost for both scenarios
+    #but this requires at least to loop over all uncovered edges to calculate
+    #the DScore for adding a vertex, and all partially covered edges to calculate
+    #the DScore for removing a Vertex. This Sounds Like it will take a long time, 
+    #In particular for removing a vertex. To make matters worse, for the current dataframes used we need
+    #To loop select all uncovered edges and partially ordered edges which is O(|E|)and 
+    VDataFrame['DScore'] = 0
+    
+    for EIndex in EDataFrame.index:
+        #.at takes a looooong time, but twice as fast as .loc
+        Vertex1 = EDataFrame.at[EIndex,'Vertex1']
+        Vertex2 = EDataFrame.at[EIndex,'Vertex2']
+        Vertex1InC = VDataFrame.at[Vertex1,'In C']
+        Vertex2InC = VDataFrame.at[Vertex2,'In C']
+        
+        if Vertex1InC != Vertex2InC: #xor
+            if Vertex1InC == True:
+                VDataFrame.at[Vertex1,'DScore'] += -EDataFrame.at[EIndex,'Weight']
+            if Vertex2InC == True:
+                VDataFrame.at[Vertex2,'DScore'] += -EDataFrame.at[EIndex,'Weight']
+        elif Vertex1InC == False and Vertex2InC == False:        
+            VDataFrame.at[Vertex1,'DScore'] += EDataFrame.at[EIndex,'Weight']
+            VDataFrame.at[Vertex2,'DScore'] += EDataFrame.at[EIndex,'Weight']
+        
+    return VDataFrame
+
+"""
+Time = time.time()
+GloballyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict)
+print('Time is', time.time() - Time)
+"""
+
+#LocallyUpdateDScore and WeightUpdateDScore are tested, using GloballyUpdatedateDScore. 
+#But are >100 times faster. This code still takes up most of the time. 
+#It could perhaps be improvedEspecially if we track the indices of UnCovered Edges. 
+def LocallyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex, Added):
+    #The DScore for the Vertex changes to negative itself, because
+    #Flipping the Vertex twice changes nothing, and therefore the cost
+    #Does not change, CostChange = -DScore added - DScore removed = 0
+    VDataFrame.at[Vertex, 'DScore'] = -VDataFrame.at[Vertex, 'DScore']
     if Added:
-        NewUncoveredEdges = []
-        for Edge in UnCoveredEdges:
-            if not Vertex in Edge:
-                NewUncoveredEdges.append(Edge)
-        return NewUncoveredEdges
-                
-    else: 
-        for Vertex2 in NeighbourDict[Vertex]:
-            if Vertex2 in VDataFrame['In C'] == 0:
-                assert not Vertex == Vertex2
-                Edge = tuple(sorted((Vertex,Vertex2), reverse = True))
-#                assert not Edge in UnCoveredEdges 
-#                print(Edge)
-                UnCoveredEdges.append(Edge)
-    return UnCoveredEdges
+        for Neighbour in NeighbourDict[Vertex]:
+            if VDataFrame.at[Neighbour, 'In C'] == 1:
+                #In this case, the edge no longer contributes to the DScore decrease if Neighbour is removed
+                #If edge Vertex, Neighbour is removed. Thus, DScore Improves by weight
+                VDataFrame.at[Neighbour, 'DScore'] += EDataFrame.at[FindEdgeIndex(Vertex, Neighbour,EdgeIndexDict), 'Weight']
+            if VDataFrame.at[Neighbour, 'In C'] == 0:
+                #In this case, the edge was not covered, but is now covered
+                #Therefore it no longer contributes to the DScore of the Neighbour
+                #For an Edge outside of C, each weight contributes positively
+                #To the DScore, hence the DScore is affected negatively
+                #If edge Vertex, Neighbour is removed. Thus, DScore Improves by weight
+                VDataFrame.at[Neighbour, 'DScore'] += -EDataFrame.at[FindEdgeIndex(Vertex, Neighbour,EdgeIndexDict), 'Weight']            
+    #If the Vertex is removed
+    else:
+        for Neighbour in NeighbourDict[Vertex]:
+            if VDataFrame.at[Neighbour, 'In C'] == 1:
+                #In this case, the edge starts to contribute negatively to the DScore decrease if Neighbour is removed
+                #Thus, DScore decreases by weight
+                VDataFrame.at[Neighbour, 'DScore'] += -EDataFrame.at[FindEdgeIndex(Vertex, Neighbour,EdgeIndexDict), 'Weight']
+            if VDataFrame.at[Neighbour, 'In C'] == 0:
+                #In this case, the edge was covered, but is now not covered
+                #Therefore it now contributes to the DScore of the Neighbour
+                #For an Edge outside of C, each weight contributes positively
+                #To the DScore, hence the DScore is affected positively
+                #Thus, DScore improves by weight
+                VDataFrame.at[Neighbour, 'DScore'] += +EDataFrame.at[FindEdgeIndex(Vertex, Neighbour,EdgeIndexDict), 'Weight']   
+    #We may choose to Calculate the DScore after a flip by Looping over the neighbours
+    #of the neighbours. 
+    #If a neighbour is not in C, flipping The vertex flips the edge between
+    #uncovered and covered. If the neighbour is in C, the edge is covered 
+    #regardless of whether the vertex is in C. 
+    #We can calculate the DScore in this way, instead of updating it
+    #based on a initial DScore because it is easier to do, and such a function
+    #should probably be written anyway to initialize the DScore
+    #. If the number of neighbours is very large O(|V|), then the complexity
+    #of this function is O(|V|^2), because we need to iterate over neighbours
+    #of neighbours. This is rather large. 
+    #On the other hand, we may use the fact that flipping the DScore change
+    #The following 
+    return VDataFrame
 
-def UpdateEdgeWeightsDict(EdgeWeightsDict, UnCoveredEdges):
-    return 0
+def WeightUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex):
+    #For indices of edges not covered
+    UnCoveredEDataFrame = EDataFrame[EDataFrame['Covered'] == 0]
+    for EIndex in UnCoveredEDataFrame.index:
+        #The weight increases by 1, since it contributes positively to 
+        #both vertices, since they are not in C, it affects the DScore by +1
+        Vertex1 = UnCoveredEDataFrame.at[EIndex,'Vertex1']
+        Vertex2 = UnCoveredEDataFrame.at[EIndex,'Vertex2']
+        VDataFrame.at[Vertex1,'DScore'] += 1
+        VDataFrame.at[Vertex2,'DScore'] += 1
+    return VDataFrame
 
-def UpdateDScore():
-    return 0
 
-
-sorted((2,1))
 #Insert a vertex so that the list remains ordered
 def InsertVertexToC(Vertex,C, DscoresDict, Ages):
     return C
+#Decision tree:
+#    Choose highest DScore with ConfChange = 1
+#   If equally high DScore and both ConfChange = 0:
+#   Choose Oldest
+#Usually, only one Vertex in an edge has ConfChange = 1
+def ChooseAddedVertex(Edge, VDataFrame):
+    ReducedEdge = ()
+    DScores = ()
+    Ages = ()
+    for Vertex in Edge:
+        if VDataFrame.at[Vertex, 'ConfChange']:
+            ReducedEdge = ReducedEdge + (Vertex,)
+            DScores = DScores + (VDataFrame.at[Vertex,'DScore'],)
+            Ages = Ages + (VDataFrame.at[Vertex,'Age'],)
+    if len(ReducedEdge) == 1:
+                                    Vertex = ReducedEdge[0]
+    elif DScores[0] > DScores[1]:   Vertex = ReducedEdge[0]
+    elif DScores[1] > DScores[0]:   Vertex = ReducedEdge[1]
+    elif Ages[0] > Ages[1]:         Vertex = ReducedEdge[0]
+    else:                           Vertex = ReducedEdge[1]
+    return Vertex
 
-#Calculate the Average Outcome of a Dictionary
-def CalcAverage(Dictionary):
-    Average = 0
-    return Average
+#Calculate the Average Outcome of a Series
 
+#Improvements: We could easily track the uncovered edges in a seperate dataframe
+#which is a 'subdataframe' of EDataFrame. It should have the same indices for
+#the same edges. Doing so would speed up computations dramatically, I believe, 
+#Since we would eliminate most(?) O(|V|^2*#Steps) computations. 
 def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate):
+    print('Building V')
     VDataFrame = pd.DataFrame(V, columns = ['Vertex'])
     VDataFrame.Vertex.astype(int)
     VDataFrame['In C'] = bool(1)
@@ -354,25 +487,42 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
 
     VDataFrame['ConfChange'] = bool(1)
     VDataFrame['Age'] = int(0)
-    
+    print('Building E')
     EDataFrame = pd.DataFrame(E, columns = ['Vertex1', 'Vertex2'])
-    EDataFrame['Covered'] = bool(0)
+    EDataFrame['Covered'] = bool(1)
     EDataFrame['Weight'] = int(1)
+    """
+    EdgeIndexDict = {}
+
+    print('Building E Dictionary')
+    
+    for Index in EDataFrame.index:
+        EdgeIndexDict[EDataFrame.at[Index,'Vertex1'], EDataFrame.at[Index,'Vertex2']] = Index
+    """
+    print('Loading E Dictionary...')
+    with open('EdgeIndexDict.pkl', 'rb') as f:
+        EdgeIndexDict = pickle.load(f)
+    """
+    print('Checking E Dictionary')
+    for Vertex1,Vertex2 in EdgeIndexDict.keys():
+        Index = EdgeIndexDict[Vertex1,Vertex2]
+        assert EDataFrame.at[Index,'Vertex1'] == Vertex1 and EDataFrame.at[Index,'Vertex2'] == Vertex2
+    """
 
     #C = copy.deepcopy(V) #If DScoresDict is not uniform, V needs to be sorted
     #Alternatively
     #C = ConstructC()
     #CompC = [Vertex for Vertex in V if not Vertex in C] #O(VC)
-    
+    print('Copying DataFrame')
     CoverDataFrame = copy.deepcopy(VDataFrame)
     CounterStart = 0
     CounterEnd = 0
     CoverCounter = 0
-    
+    print('Starting Loop')
     InitialTime = time.time()
     while time.time() - InitialTime < CutOffTime:
         CounterStart += 1
-        
+        """
         for Vertex in EDataFrame['Vertex1']:
             assert isinstance(Vertex,int)
         for Vertex in EDataFrame['Vertex2']:
@@ -389,96 +539,151 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
             assert isinstance(ConfChange,bool)
         for Age in VDataFrame['Age']:
             assert isinstance(Age, int)  
+        """
         
-        if EDataFrame['Covered'].all:
-            if not VDataFrame.any:
+        
+        if EDataFrame['Covered'].all():
+            print(time.time() - InitialTime, ' Removing Vertex number', CoverCounter)
+            if not VDataFrame['In C'].any():
                 print(time.time() - InitialTime)
                 break
-            Cover = copy.deepcopy(VDataFrame)
-            VDataFrame.loc[0,'In C'] = bool(0)
-            UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, Added = 0)
-            UpdateEdgeWeightsDict(EdgeWeightsDict,UnCoveredEdges) #ToWrite
-            UpdateDScore()
+            
+            CoverDataFrame = copy.deepcopy(VDataFrame)
+            """
+            #The following is an attempt to improve the Vertex selection, but 
+            #it delivers worse results. Regardless of the preference this 
+            #has for specifically shaped blocks. 
+            CDataFrame = VDataFrame[VDataFrame['In C'] == True]
+            #Next line probably takes twice as long as necessary
+            DScoreMax = CDataFrame.at[CDataFrame.index[0],'DScore']
+            IndicesMaxDScore = []
+            
+            for Index in CDataFrame.index:
+                DScore = CDataFrame['DScore'].iat[0]
+                if DScore == DScoreMax:
+                    IndicesMaxDScore.append(Index)
+                elif DScore > DScoreMax:
+                    IndicesMaxDScore = []
+                    IndicesMaxDScore.append(Index)
+                    DScoreMax = DScore
+            Ages = [CDataFrame.at[Index,'Age'] for Index in IndicesMaxDScore]
+            AgeMax = Ages[0]
+            IndicesMaxAge = []
+            for Index,Age in enumerate(Ages):
+                if Age == AgeMax:
+                    IndicesMaxAge.append(Index)
+                elif Age > AgeMax:
+                    IndicesMaxAge = []
+                    IndicesMaxAge.append(Index)
+                    AgeMax = Age
+            VertexSelection = [IndicesMaxDScore[Index] for Index in IndicesMaxAge]
+            Vertex = random.choice(VertexSelection)
+            """
+            Vertex = VDataFrame[VDataFrame['In C'] == True]['DScore'].idxmax() 
+            assert VDataFrame.at[Vertex,'DScore'] <= 0
+            VDataFrame.at[Vertex,'In C'] = False
+            VDataFrame.at[Vertex, 'Age'] = int(0)
+            VDataFrame = LocallyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex, Added = False) 
+            
+            #VDataFrame = GloballyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict)
+            EDataFrame = UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, EdgeIndexDict, Added = False)
+            
+            #print('Local Global Match Removed 532', VDataFrame.equals(VDataFrame2))
+            #print(EDataFrame['Covered'].sum())      
+
             CoverCounter += 1
             continue
-        Vertex = C.pop(-1)
-        ConfChangeDict[Vertex] = bool(0)
-        for Neighbour in NeighbourDict[Vertex]:
-            ConfChangeDict[Neighbour] = bool(1)
-        
-        print('before',len(UnCoveredEdges))
-        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,0,C,V, NeighbourDict)
-        UpdateEdgeWeightsDict(EdgeWeightsDict,UnCoveredEdges) #ToWrite
-        UpdateDScore()
-        Edge = random.choice(UnCoveredEdges)
-        ReducedEdge = ()
-        for Vertex in Edge:
-            if ConfChangeDict[Vertex]:
-                ReducedEdge = ReducedEdge + (Vertex,)
-#        ReducedEdge = (Vertex for Vertex in Edge if ConfChangeDict[Vertex])
-        SortD(ReducedEdge, DScoresDict, Reverse = True)
-        Vertex = ReducedEdge[0]
-        InsertVertexToC(Vertex,C, DScoresDict, AgeDict)
-        for Neighbour in NeighbourDict[Vertex]:
-            ConfChangeDict[Neighbour] = bool(1)        
-        print('Mid',len(UnCoveredEdges))
-        UpdateUnCoveredEdges(UnCoveredEdges,Vertex,1,C,V, NeighbourDict)
-        UpdateEdgeWeightsDict(EdgeWeightsDict, UnCoveredEdges) #ToWrite
-        UpdateDScore()
-        for Edge in UnCoveredEdges:
-            assert isinstance(Edge, tuple)
-            EdgeWeightsDict[Edge] = EdgeWeightsDict[Edge] + 1
-        W = CalcAverage(EdgeWeightsDict)
-        if W > WeightLimit:
-            for Edge in E:
-                EdgeWeightsDict[Edge] = math.ceil(EdgeWeightsDict[Edge]*WeightLossRate)
-        CounterEnd += 1
-        print('End',len(UnCoveredEdges))
-    print('CounterStart', CounterStart, '\n', 'CounterEnd', CounterEnd, '\n CoverCounter', CoverCounter)
-    return Cover,C,UnCoveredEdges
-        
+        #Next line probably takes twice as long as necessary
 
-for row in VDataFrame:
-    print(row)
-print(~bool(1))
-not EDataFrame['Covered'].any
-print('True')
-print(UnCovered.all())
+        Vertex = VDataFrame[VDataFrame['In C'] == 1]['DScore'].idxmax()
+        assert VDataFrame.at[Vertex,'DScore'] <= 0
+        
+        VDataFrame.at[Vertex, 'In C'] = False
+        #print(Vertex, 'In C', VDataFrame.at[Vertex, 'In C'])
+        VDataFrame.at[Vertex, 'ConfChange'] = False
+        VDataFrame.at[Vertex, 'Age'] = int(0)
+        for Neighbour in NeighbourDict[Vertex]:
+            VDataFrame.at[Neighbour,'ConfChange'] = True
+
+        EDataFrame = UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, EdgeIndexDict, Added = False)
+
+        VDataFrame = LocallyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex, Added = False) 
+
+        #VDataFrame = GloballyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict)
+
+        #Is it necessary to put EDataFrame = ? and to return EDataFrame? Or is it sufficient to apply methods 
+        #To EDataFrame in the Function?
+        
+        #Lengthy, better method? Store uncovered edges somewhere
+
+        EIndex = random.choice(EDataFrame[EDataFrame['Covered'] == False].index)
+        
+        Edge = EDataFrame.at[EIndex,'Vertex1'], EDataFrame.at[EIndex,'Vertex2']
+        Vertex = ChooseAddedVertex(Edge, VDataFrame)
+
+        assert VDataFrame.at[Vertex,'DScore'] >= 0
+        VDataFrame.at[Vertex,'In C'] = True
+        VDataFrame.at[Vertex, 'ConfChange'] = False
+        VDataFrame.at[Vertex, 'Age'] = int(0)
+        for Neighbour in NeighbourDict[Vertex]:
+            VDataFrame.at[Neighbour, 'ConfChange'] = True       
+
+        UpdateUnCoveredEdges(EDataFrame, VDataFrame, Vertex,  NeighbourDict, EdgeIndexDict, Added = True)
+
+        VDataFrame = LocallyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex, Added = True)
+
+        for EIndex in EDataFrame[EDataFrame['Covered'] == False].index: #A bit slow
+            EDataFrame.at[EIndex, 'Weight'] = EDataFrame.at[EIndex, 'Weight'] + 1
+        VDataFrame = WeightUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict, Vertex)               
+        VDataFrame['Age'] += 1
+        W = EDataFrame['Weight'].mean()
+        if W > WeightLimit:
+            for EIndex in EDataFrame.index:
+                EDataFrame.at[EIndex, 'Weight'] = math.ceil(EDataFrame.at[EIndex, 'Weight']*WeightLossRate)
+                VDataFrame = GloballyUpdateDScore(EDataFrame, VDataFrame, NeighbourDict, EdgeIndexDict)
+                print('Weights partially forgotten')
+        CounterEnd += 1
+    else: print('Time is out')
+    print('CounterStart', CounterStart, '\n', 'CounterEnd', CounterEnd, '\n CoverCounter', CoverCounter)
+    return CoverDataFrame
+
+
+
     #In this code, we build two global objects. The ConfigurationTracker tracks
     #the configurations used to build blocks. The Cube tracks which locations
     #contain blocks. We try to add blocks until all blocks are contained in the
     #Cube. Then the functions and loops should end. 
     """
     (G,cutoff)
-    Input: graph G = (V,E), the cutoff time
-    Output: vertex cover of G
-    2 begin
-    3 initialize edge weights and dscores of vertices;
-    4 initialize the confChange array as an all-1 array;
-    5 construct C greedily until it is a vertex cover;
-    6 C∗ := C;
-    7 while elapsed time < cutoff do
-    8   if there is no uncovered edge then
-    9   C∗ := C;
-    10  remove a vertex with the highest dscore from C;
-    11  continue;
+    Input: graph G = (V,E), the cutoff time                 
+    Output: vertex cover of G                               
+    2 begin                                                 
+    3 initialize edge weights and dscores of vertices;      
+    4 initialize the confChange array as an all-1 array;    
+    5 construct C greedily until it is a vertex cover; - just C = V
+    6 C∗ := C;                                              
+    7 while elapsed time < cutoff do                        
+    8   if there is no uncovered edge then                  
+    9   C∗ := C;                                            
+    10  remove a vertex with the highest dscore from C;     
+    11  continue;                                           
     12 choose a vertex u ∈ C with the highest dscore, breaking ties in favor of the oldest
-    one;
-    13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1 for each z ∈ N(u);
-    14 choose an uncovered edge e randomly;
+    one; to be tested and Age - implemented
+    13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1 for each z ∈ N(u); 
+    14 choose an uncovered edge e randomly; 
     15 choose a vertex v ∈ e such that confChange(v) = 1 with higher dscore, breaking ties
-    in favor of the older one;
-    16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);
-    17 w(e) := w(e) + 1 for each uncovered edge e;
-    18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e;
-    19 return C∗;
-    20 end
+    in favor of the older one; To Break ties
+    16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);  check
+    17 w(e) := w(e) + 1 for each uncovered edge e;  check
+    18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
+    19 return C∗; check
+    20 end check
     """
     
 def main():
     WeightLimit = 100
     WeightLossRate = 0.5
-    CutOffTime = 0.05
+    CutOffTime = 50
     
     
     with open('saved_edges.pkl', 'rb') as f:
@@ -491,13 +696,10 @@ def main():
         GraphArray = pickle.load(f)
         
     #duration of algorithm in seconds
-    Cover,C,UnCoveredEdges = NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
-    CComp = [Vertex for Vertex in V if not Vertex in C]
-    print(CComp)
-    print(C==V)
-    print(len(UnCoveredEdges))
+    CoverDataFrame = NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate)
+    print(CoverDataFrame)
+    CoverDataFrame.to_excel('CoverDataFrame.xlsx')
 if __name__ == "__main__":
     main()
-
-              
+           
               
