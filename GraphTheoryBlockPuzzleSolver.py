@@ -29,15 +29,15 @@ This is a temporary script file.
 
 def GenerateCubeRotations():
     """
-    
+    Generate all 24 rotations matrices in a list.
 
-    Returns a list of 24 3x3 numpy arrays, which, when acting with 
-    matrixmultiplication on a vector rotates it. They are proper rotations, 
-    i.e. no reflections. Multiplying a shape by these rotations generates
-    all possible configurations of the shape. 
+    Returns
     -------
-    CubeRotations : returns Cuberotations, a list of 24 3x3 numpy arrays
-
+    CubeRotations : A list of 24 3x3 numpy arrays, which, when acting with
+    matrixmultiplication on a vector rotates the vector. They are proper
+    rotations, i.e. no reflections, and symmetries of the cube. 
+    Multiplying a shape by these rotations generates all possible
+    orientations of the shape. 
     """
     Permutations3 = [[0, 1, 2], [0, 2, 1], [
         1, 2, 0], [1, 0, 2], [2, 0, 1], [2, 1, 0]]
@@ -70,7 +70,6 @@ def RotateShape(Shape, Rotation):
     -------
     RotatedShape, the shape rotated in the way specified by the rotation 
     around approximately its midpoint
-
     """
     if len(Shape) == 0:
         print('Catastrofic RotateShape Error')
@@ -833,7 +832,7 @@ def main():
     """
     WeightLimit = 100
     WeightLossRate = 0.5
-    CutOffTime = 100
+    CutOffTime = 10
     # duration of algorithm in seconds
 
     with open('saved_edges.pkl', 'rb') as f:
