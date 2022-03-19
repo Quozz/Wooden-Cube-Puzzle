@@ -365,11 +365,24 @@ def GenerateNeighbourDictionary(E, V):
 
 
 def GenerateGraphArray(E, V):
-    GraphArray = np.zeros((len(V), len(V)))
+    """
+    
+
+    Parameters
+    ----------
+    E : List of Edges, which are tuples (Vertex1,Vertex2)
+    V : List of vertices
+
+    Returns
+    -------
+    GraphArray : len(V) x len(V) np.array with True on edges. 
+
+    """
+    GraphArray = np.zeros((len(V), len(V)), dtype = bool)
+    GraphArray.dtype
     for i, j in E:
         GraphArray[i, j] = 1
         GraphArray[j, i] = 1
-    np.fill_diagonal(GraphArray, 1)
     with open('GraphArray.pkl', 'wb') as f:
         pickle.dump(GraphArray, f)
     return GraphArray
@@ -419,9 +432,9 @@ def SortD(C, DScoresDict, Reverse):
     DScores = []
     for Vertex in C:
         DScores.append(DScoresDict[Vertex])
-    CNew = [Vertex for (DScore, Vertex) in sorted(zip(DScores, C),
+    CNew = [Vertex for (DScore, Vertex) in tuple(sorted(zip(DScores, C),
                                                   key=lambda pair: pair[0],
-                                                  reverse=Reverse)]
+                                                  reverse=Reverse))]
     return CNew
 
 
@@ -473,7 +486,8 @@ def UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
     for Vertex2 in NeighbourDict[Vertex]:
         if Cs[Vertex2] == 0:
             assert not Vertex == Vertex2
-            VertexHigh, VertexLow = sorted((Vertex, Vertex2), reverse=True)
+            VertexHigh, VertexLow = tuple(sorted((Vertex, Vertex2),
+                                                 reverse=True))
             Index = EdgeIndexDict[VertexHigh, VertexLow]
             """
             print('Edge', (EDataFrame.at[Index,'Vertex1'],
@@ -487,8 +501,33 @@ def UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
             Uncovereds[Index] = not bool(Added)
     return Uncovereds
 
+def UpdateUncovered(Cs, UncoveredEdges, Vertex,  NeighbourDict, Added):
+    # Updates the UnCoveredEdges set in EDataFrame After
+    # Adding (Added = True) or removing (Added = False) a Vertex
+    assert Cs[Vertex] == Added
+    for Vertex2 in NeighbourDict[Vertex]:
+        if Cs[Vertex2] == 0:
+            assert not Vertex == Vertex2
+            SortedEdge = tuple(sorted((Vertex, Vertex2), reverse=True))
+            
+            """
+            print('Edge', (EDataFrame.at[Index,'Vertex1'],
+                           EDataFrame.at[Index,'Vertex2']),
+                  '\n Covered', EDataFrame.at[Index,'Covered'],
+                  '\n Added', Added,
+                  '\n VertexHigh,  VertexLow, Vertex, Vertex2',
+                  VertexHigh, VertexLow, Vertex, Vertex2)
+            """
+            assert (SortedEdge in UncoveredEdges) == Added
+            if Added:
+                UncoveredEdges.remove(SortedEdge)
+            else:
+                UncoveredEdges.append(SortedEdge)
+    return UncoveredEdges
 
-def GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs, Weights):
+
+
+def GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs, WeightArray, E):
     """
     Update DScore for all Vertices
     Time: ~37 seconds, i.e. Extremely Long
@@ -512,26 +551,22 @@ def GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs, Weights):
     # First reset the Dscore
     Dscores = [0]*len(Dscores)
     # For each edge, check if the corresponding vertices are in C
-    for EIndex in range(len(Vertex1s)):
-        # .at takes a looooong time, but twice as fast as .loc
-        Vertex1 = Vertex1s[EIndex]
-        Vertex2 = Vertex2s[EIndex]
+    for Vertex1,Vertex2 in E:
         Vertex1InC = Cs[Vertex1]
         Vertex2InC = Cs[Vertex2]
         # If so, change the Dscore of the vertices appropriately
         if Vertex1InC != Vertex2InC:  # x or
             if Vertex1InC == True:
-                Dscores[Vertex1] += - Weights[EIndex]
+                Dscores[Vertex1] += - WeightArray[Vertex1,Vertex2]
             if Vertex2InC == True:
-                Dscores[Vertex2] += - Weights[EIndex]
+                Dscores[Vertex2] += - WeightArray[Vertex1,Vertex2]
         elif Vertex1InC == False and Vertex2InC == False:
-            Dscores[Vertex1] += Weights[EIndex]
-            Dscores[Vertex2] += Weights[EIndex]
+            Dscores[Vertex1] += WeightArray[Vertex1,Vertex2]
+            Dscores[Vertex2] += WeightArray[Vertex1,Vertex2]
     return Dscores
 
 
-def UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict, EdgeIndexDict,
-                      Vertex, Added):
+def UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict, Vertex, Added):
     # UpdateDScoreLocal and WeightUpdateDScore are tested, using GloballyUpdatedateDScore.
     # But are >100 times faster. This code still takes up most of the time.
     # It could perhaps be improvedEspecially if we track the indices of UnCovered
@@ -541,11 +576,11 @@ def UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict, EdgeIndexDict,
     Dscores[Vertex] = -Dscores[Vertex]
     if Added:   # If the Vertex is Added
         for Neighbour in NeighbourDict[Vertex]:
-            EIndex = FindEdgeIndex(Vertex, Neighbour, EdgeIndexDict)
+            SortedEdge = tuple(sorted((Vertex,Neighbour), reverse = True))
             if Cs[Neighbour] == True:
                 # In this case, the edge no longer contributes to the DScore decrease if Neighbour is removed
                 # If edge Vertex, Neighbour is removed. Thus, DScore Improves by weight
-                Dscores[Neighbour] += + Weights[EIndex]
+                Dscores[Neighbour] += + WeightArray[SortedEdge]
             if Cs[Neighbour] == False:
                 # In this case, the edge was not covered, but is now covered
                 # Therefore it no longer contributes to the DScore of the Neighbour
@@ -553,24 +588,23 @@ def UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict, EdgeIndexDict,
                 # To the DScore, hence the DScore is affected negatively
                 # If edge Vertex, Neighbour is removed. Thus, DScore Improves
                 # by weight
-                EIndex = FindEdgeIndex(Vertex, Neighbour, EdgeIndexDict)
-                Dscores[Neighbour] += - Weights[EIndex]
+                Dscores[Neighbour] += - WeightArray[SortedEdge]
     else:       # If the Vertex is removed
         for Neighbour in NeighbourDict[Vertex]:
-            EIndex = FindEdgeIndex(Vertex, Neighbour, EdgeIndexDict)
+            SortedEdge = tuple(sorted((Vertex,Neighbour), reverse = True))
             if Cs[Neighbour] == True:
                 # In this case, the edge starts to contribute negatively to the
                 # DScore decrease if Neighbour is removed
                 # Thus, DScore decreases by weight
 
-                Dscores[Neighbour] += - Weights[EIndex]
+                Dscores[Neighbour] += - WeightArray[SortedEdge]
             if Cs[Neighbour] == False:
                 # In this case, the edge was covered, but is now not covered
                 # Therefore it now contributes to the DScore of the Neighbour
                 # For an Edge outside of C, each weight contributes positively
                 # To the DScore, hence the DScore is affected positively
                 # Thus, DScore improves by weight
-                Dscores[Neighbour] += + Weights[EIndex]
+                Dscores[Neighbour] += + WeightArray[SortedEdge]
     # We may choose to Calculate the DScore after a flip by Looping over the
     # neighbours of the neighbours.
     # If a neighbour is not in C, flipping The vertex flips the edge between
@@ -588,20 +622,18 @@ def UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict, EdgeIndexDict,
 
 # as of 19/03/2022 this one line takes up most of the time. It can be
 # avoided by tracking UncoveredIndexs instead of a function Edges -> {0,1}
-def UncoverdGen(Uncovereds):
+def UncoveredGen(Uncovereds):
     return list(itertools.compress(range(len(Uncovereds)), Uncovereds))
 
     
 
 
-def WeightUpdateDScore(Uncovereds, Vertex1s, Vertex2s, Dscores):
+def WeightUpdateDScore(UncoveredEdges, Vertex1s, Vertex2s, Dscores):
     # For indices of edges not covered
-    UncoveredIndexs = UncoverdGen(Uncovereds)
-    for EIndex in UncoveredIndexs:
+    for Edge in UncoveredEdges:
         # The weight increases by 1, since it contributes positively to
         # both vertices, since they are not in C, it affects the DScore by +1
-        Vertex1 = Vertex1s[EIndex]
-        Vertex2 = Vertex2s[EIndex]
+        Vertex1, Vertex2 = Edge
         Dscores[Vertex1] += 1
         Dscores[Vertex2] += 1
     return Dscores
@@ -658,6 +690,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     EDataFrame = pd.DataFrame(E, columns=['Vertex1', 'Vertex2'])
     EDataFrame['Uncovered'] = bool(0)
     EDataFrame['Weight'] = int(1)
+    
     """
     EdgeIndexDict = {}
 
@@ -674,13 +707,20 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     Ages = list(VDataFrame['Age'])
     Vertex1s = list(EDataFrame['Vertex1'])
     Vertex2s = list(EDataFrame['Vertex2'])
-    Uncovereds = list(EDataFrame['Uncovered'])
-    Weights = list(EDataFrame['Weight'])
+    # Uncovereds = list(EDataFrame['Uncovered'])
+    # Weights = list(EDataFrame['Weight'])
+    WeightArray = np.zeros((len(V),len(V)),dtype = int)
+    for i in range(len(V)):
+        for j in range(len(V)):
+            if i > j:
+                WeightArray[i,j] = int(GraphArray[i,j])
+    UncoveredEdges = []
+    
 
-
+    """
     with open('EdgeIndexDict.pkl', 'rb') as f:
         EdgeIndexDict = pickle.load(f)
-    """
+    
     print('Checking E Dictionary')
     for Vertex1,Vertex2 in EdgeIndexDict.keys():
         Index = EdgeIndexDict[Vertex1,Vertex2]
@@ -694,7 +734,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     CoverCounter = 0
     print('Starting Loop')
     InitialTime = time.time()
-    while time.time() - InitialTime < CutOffTime:
+    while time.time() - InitialTime < CutOffTime and CoverCounter < 13:
         CounterStart += 1
         """
         for Vertex in Vertex1s:
@@ -715,7 +755,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
             assert isinstance(Age, int)
         """
         # If all edges are covered, remove a Vertex from C
-        if not any(Uncovereds):
+        if not UncoveredEdges:
             print(time.time() - InitialTime,
                   ' Removing Vertex number', CoverCounter)
             # If C is empty, we cannot remove a Vertex and hence the loop is
@@ -738,13 +778,16 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
             assert Cs[Vertex] == True
             Cs[Vertex] = False
             Ages[Vertex] = int(0)
-            Dscores = UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict,
-                                           EdgeIndexDict, Vertex, Added=False)
-            Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
-                                         EdgeIndexDict, Added=False)
+            Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray,
+                                        NeighbourDict, Vertex, Added=False)
+            # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
+            #                              EdgeIndexDict, Added=False)
+            UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
+                                             NeighbourDict, Added=False)
 
             CoverCounter += 1
             continue
+        
         # Remove Vertex with highest DScore from C
         CIndices = list(itertools.compress(range(len(Cs)), Cs))
         CDscores = list(itertools.compress(Dscores, Cs))
@@ -762,13 +805,16 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         for Neighbour in NeighbourDict[Vertex]:
             Confs[Neighbour] = True
 
-        Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
-                                   EdgeIndexDict, Added=False)
+        # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
+        #                            EdgeIndexDict, Added=False)
 
-        Dscores = UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict,
-                                    EdgeIndexDict, Vertex, Added=False)
+        UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
+                                         NeighbourDict, Added=False)
 
-        # Perhaps not necessary to explicitly update list Dscores = .. etc.
+        Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict,
+                                    Vertex, Added=False)
+
+        # It is not necessary to explicitly update list Dscores = .. etc.
         # since it is already changed inside function
 
         # Takes 0.011s, better method? Store uncovered edges somewhere
@@ -777,10 +823,11 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         # for i, Covered in enumerate(Covereds):
         #     if not Covered:
         #         UncoveredIndexs.append(i)
-        UncoveredIndexs = UncoverdGen(Uncovereds)
-        EIndex = random.choice(UncoveredIndexs)
+        # UncoveredIndexs = UncoveredGen(Uncovereds)
+        # EIndex = random.choice(UncoveredIndexs)
         
-        Edge = Vertex1s[EIndex], Vertex2s[EIndex]
+        # Edge = Vertex1s[EIndex], Vertex2s[EIndex]
+        Edge = random.choice(UncoveredEdges)
         Vertex = ChooseAddedVertex(Edge, Confs, Dscores, Ages)
 
         assert Dscores[Vertex] >= 0
@@ -789,27 +836,27 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
         for Neighbour in NeighbourDict[Vertex]:
             Confs[Neighbour] = True
 
-        Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
-                                   EdgeIndexDict, Added=True)
+        # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
+        #                            EdgeIndexDict, Added=True)
+        UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
+                                         NeighbourDict, Added=True)
+        Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict,
+                                    Vertex, Added=True)
+        # UncoveredIndexs = UncoveredGen(Uncovereds)
 
-        Dscores = UpdateDScoreLocal(Dscores, Cs, Weights, NeighbourDict,
-                                    EdgeIndexDict, Vertex, Added=True)
+        for Edge in UncoveredEdges:
+            WeightArray[Edge] += 1
+        Dscores = WeightUpdateDScore(UncoveredEdges, Vertex1s, Vertex2s, Dscores)
         
-        UncoveredIndexs = UncoverdGen(Uncovereds)
-
-        for EIndex in UncoveredIndexs:
-            Weights[EIndex] += 1
-        Dscores = WeightUpdateDScore(Uncovereds, Vertex1s, Vertex2s, Dscores)
         for Vertex in range(len(Ages)):
             Ages[Vertex] += 1
-            
-        W = sum(Weights)/len(Weights)
+        W = np.sum(WeightArray)/len(E)
         if W > WeightLimit:
-            for EIndex in range(len(Weights)):
-                Weights[EIndex] = math.ceil(
-                    Weights[EIndex]*WeightLossRate)
+            for Edge in E:
+                WeightArray[Edge] = math.ceil(
+                    WeightArray[Edge]*WeightLossRate)
                 Dscores = GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs,
-                                               Weights)
+                                               WeightArray, E)
                 print('Weights partially forgotten')
         CounterEnd += 1
     else:
@@ -818,7 +865,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     print('CounterStart', CounterStart,
           '\n', 'CounterEnd', CounterEnd,
           '\n CoverCounter', CoverCounter)
-    return CoverCs, Cs, Dscores, Confs, Ages, Uncovereds, Weights
+    return CoverCs, Cs, Dscores, Confs, Ages, UncoveredEdges, WeightArray
 
     """
     (G,cutoff)
@@ -860,7 +907,7 @@ def main():
     """
     WeightLimit = 100
     WeightLossRate = 0.5
-    CutOffTime = 10
+    CutOffTime = 100
     # duration of algorithm in seconds
 
     with open('saved_edges.pkl', 'rb') as f:
@@ -872,7 +919,7 @@ def main():
     with open('GraphArray.pkl', 'rb') as f:
         GraphArray = pickle.load(f)
 
-    CoverCs, Cs, Dscores, Confs, Ages, Uncovereds, Weights = \
+    CoverCs, Cs, Dscores, Confs, Ages, UncoveredEdges, WeightArray = \
         NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, 
               WeightLossRate)
     print(CoverCs)
@@ -891,12 +938,12 @@ def main():
     with open('Ages.pkl', 'wb') as f:
     # Pickle the 'data' dictionary using the highest protocol available.
         pickle.dump(Ages, f, pickle.HIGHEST_PROTOCOL)
-    with open('Uncovereds.pkl', 'wb') as f:
+    with open('UncoveredEdges.pkl', 'wb') as f:
     # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Uncovereds, f, pickle.HIGHEST_PROTOCOL)
-    with open('Weights.pkl', 'wb') as f:
+        pickle.dump(UncoveredEdges, f, pickle.HIGHEST_PROTOCOL)
+    with open('WeightArray.pkl', 'wb') as f:
     # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Weights, f, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(WeightArray, f, pickle.HIGHEST_PROTOCOL)
         
 
 if __name__ == "__main__":
