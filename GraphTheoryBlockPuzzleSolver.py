@@ -1,12 +1,11 @@
-import random as random
+import random
+import math
+import pickle
+import time
+import copy
+import itertools
 import numpy as np
-import math as math
-# import matplotlib.pyplot as plt
-import pickle as pickle
-import time as time
-import copy as copy
-import pandas as pd
-import itertools as itertools
+
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jan 14 14:02:25 2022
@@ -15,121 +14,100 @@ Created on Fri Jan 14 14:02:25 2022
 """
 
 # -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-This is a temporary script file.
-"""
-
-###
-# Generate a list of all 24 proper rotations that are symmetries of the cube as
-# np arrays representing linear transformation matrices
-###
 
 
-def GenerateCubeRotations():
+def generate_cube_rotations():
     """
-    Generate all 24 rotations matrices in a list.
+    Generate all 24 cube preserving proper rotations matrices in a list.
 
     Returns
     -------
-    CubeRotations : A list of 24 3x3 numpy arrays, which, when acting with
+    cube_rotations : A list of 24 3x3 numpy arrays, which, when acting with
     matrixmultiplication on a vector rotates the vector. They are proper
     rotations, i.e. no reflections, and symmetries of the cube.
     Multiplying a shape by these rotations generates all possible
     orientations of the shape.
     """
-    Permutations3 = [[0, 1, 2], [0, 2, 1], [
+    permutations3 = [[0, 1, 2], [0, 2, 1], [
         1, 2, 0], [1, 0, 2], [2, 0, 1], [2, 1, 0]]
-    Mirrors = [[], [0, 1], [0, 2], [1, 2]]
-    CubeRotations = []
-    for Permutation in Permutations3:
-        for Mirror in Mirrors:
-            CubeRotation = np.zeros((3, 3))
+    mirrors = [[], [0, 1], [0, 2], [1, 2]]
+    cube_rotations = []
+    for permutation in permutations3:
+        for mirror in mirrors:
+            cube_rotation = np.zeros((3, 3))
             for i in range(3):
-                if i in Mirror:
-                    CubeRotation[i, Permutation[i]] = -1
+                if i in mirror:
+                    cube_rotation[i, permutation[i]] = -1
                 else:
-                    CubeRotation[i, Permutation[i]] = 1
-            CubeRotations.append(CubeRotation)
-    return CubeRotations
+                    cube_rotation[i, permutation[i]] = 1
+            cube_rotations.append(cube_rotation)
+    return cube_rotations
 
 
-def RotateShape(Shape, Rotation):
+def rotate_shape(shape, rotation):
     """
     Rotate a shape around its (rounded) midpoint.
 
     Parameters
     ----------
-    Shape : A list of 3-dimensional numpy arrays - vectors -  representing
+    shape : A list of 3-dimensional numpy arrays - vectors -  representing
     the locations of the blocks the shape consists of.
-    Rotation :
+    rotation :
         A 3x3 numpy array which rotates vectors via matrix multiplication.
 
     Returns
     -------
-    RotatedShape, the shape rotated in the way specified by the rotation
+    rotated_shape, the shape rotated in the way specified by the rotation
     around approximately its midpoint
     """
-    if len(Shape) == 0:
-        print('Catastrofic RotateShape Error')
+    if len(shape) == 0:
+        print('Catastrofic rotate_shape Error')
         return []
-    TotalSum = np.array([0, 0, 0])
-    for Location in Shape:
-        TotalSum += Location
-    Average = TotalSum/len(Shape)
-    MidPoint = np.rint(Average).astype(int)
-    RotatedShape = [np.rint(np.matmul(
-        Rotation, Location - MidPoint) + MidPoint).astype(int) for Location in Shape]
-    return RotatedShape
-
-###
-# Generates the grid coordinates of a Shape, where the location of the Shape
-# is determined by rotationlabel Shapeconfiguration[0] and translation
-# Shapeconfiguration[1], with respect to a starting position of the shape.
-###
+    total_sum = np.array([0, 0, 0])
+    for location in shape:
+        total_sum += location
+    average = total_sum/len(shape)
+    mid_point = np.rint(average).astype(int)
+    rotated_shape = [np.rint(np.matmul(rotation, location - mid_point)
+                            + mid_point).astype(int) for location in shape]
+    return rotated_shape
 
 
-def GenerateShapeLocation(ShapeConfiguration, Shape, CubeRotations):
+def generate_shape_location(shape_configuration, shape, cube_rotations):
     """
     Transform a shape by a rotation and then a translation.
-    
+
     Parameters
     ----------
-    ShapeConfiguration : A tuple of length two containing at index 0 a np.array
+    shape_configuration : A tuple of length two containing at index 0 a np.array
     of length 3 representing a translation, and at index 1 an index describing
     a rotation
-    Shape : The np.arrays of length 3 representing the untransformed locations
+    shape : The np.arrays of length 3 representing the untransformed locations
     of a shape
-    CubeRotations : a list of 24 rotations which correspond to the index in
-    ShapeConfiguration[1]
+    cube_rotations : a list of 24 rotations which correspond to the index in
+    shape_configuration[1]
 
     Returns
     -------
-    TranslatedShape : A transformed shape consisting of np.arrays of length 3.
+    translated_shape : A transformed shape consisting of np.arrays of length 3.
     It first rotates the shape and  the translates the shape
 
     """
-    Rotation = CubeRotations[ShapeConfiguration[1]]
-    Translation = ShapeConfiguration[0]
-    RotatedShape = [np.matmul(Rotation, Location) for Location in Shape]
-    TranslatedShape = [np.rint(np.add(Translation, Location)).astype(
-        int) for Location in RotatedShape]
-    return TranslatedShape
-
-###
-# Checks whether all grid coordinates of a Shape are all contained in the 5x5x5
-# grid.
-###
+    rotation = cube_rotations[shape_configuration[1]]
+    translation = shape_configuration[0]
+    rotated_shape = [np.matmul(rotation, location) for location in shape]
+    translated_shape = [np.rint(np.add(translation, location)).astype(
+        int) for location in rotated_shape]
+    return translated_shape
 
 
-def GoodShapeLocation(ShapeLocation):
+def good_shape_location(shape_location):
     """
     Check whether a shape is contained in the 5x5x5 grid [0,4] x [0,4] x [0,4].
 
     Parameters
     ----------
-    ShapeLocation : A list of 1D np.arrays of length 3, describing a shape
+    shape_location : A list of 1D np.arrays of length 3, describing a shape
 
     Returns
     -------
@@ -137,405 +115,247 @@ def GoodShapeLocation(ShapeLocation):
         True if the shape is contained in the grid.
 
     """
-    for Location in ShapeLocation:
-        if np.any(Location > 4.5):
+    for location in shape_location:
+        if np.any(location > 4.5):
             return False
-        if np.any(Location < -0.5):
+        if np.any(location < -0.5):
             return False
     return True
 
-###
-# This function adds a shape to the cube. It also computes the
-# Energy difference generated by adding this shape
-###
 
-
-def AddShape(Cube, ShapeLocation):
+def add_shape(cube, shape_location):
     """
     Add a shape to the cube, keeping track of how many shapes overlap
     a specific point in a 5x5x5 grid.
 
     Parameters
     ----------
-    Cube : a 5x5x5 np.array containing positive integer values describing
+    cube : a 5x5x5 np.array containing positive integer values describing
            how many shapes overlap at that point, excluding the shape
-           described in ShapeLocation
-    ShapeLocation : A list containing np.arrays of length 3 describing
+           described in shape_location
+    shape_location : A list containing np.arrays of length 3 describing
     locations. As a whole, they describe a shape.
 
     Returns
     -------
-    Cube : a 5x5x5 np.array containing positive integer values describing
+    cube : a 5x5x5 np.array containing positive integer values describing
            how many shapes overlap at that point, including the shape
-           described in ShapeLocation
+           described in shape_location
     """
-    for Location in ShapeLocation:
-        Value = Cube[tuple(Location)]
-        Cube[tuple(Location)] = Value + 1
-    return Cube
+    for location in shape_location:
+        value = cube[tuple(location)]
+        cube[tuple(location)] = value + 1
+    return cube
 
 
-def CheckOverlap(Cube, Locations):
-    """
-    Check whether Shapes overlap inside at the specified locations.
-
-    Parameters
-    ----------
-    Cube : a 5x5x5 np.array containing positive integer values describing
-           how many shapes overlap at that point,
-    Locations : A list of length 3 integer np.arrays contained in a 5x5x5 grid.
-                Typically, all locations in the 5x5x5 grid are included in this
-                list.
-
-    Returns
-    -------
-    False if shapes overlap at a location in locations.
-    True else.
-    """
-    for Location in Locations:
-        if not Cube[tuple(Location)] == 0 or Cube[tuple(Location)] == 1:
-            return False
-    return True
-
-
-def RemoveShape(Cube, ShapeLocation):
-    """
-    This function removes a shape from the cube. It prints an error if
-    there is no shape in this location. However, it would be better to check if
-    there is a shape at this location before doing any
-    """
-    EnergyDifference = 0
-    for Location in ShapeLocation:
-        Value = Cube[tuple(Location)]
-        if Value == 0:
-            print('error RemoveShape, Catastrophic')
-        if not Value == 1:
-            EnergyDifference += 3 - 2*Value
-        Cube[tuple(Location)] = Cube[tuple(Location)] - 1
-    return EnergyDifference
-
-
-def EnergyFunction(Cube):
-    """
-    Calculate the energy of a specific cube
-
-    Parameters
-    ----------
-    Cube : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    None.
-
-    """
-    Energy = 0
-    for index, value in np.ndenumerate(Cube):
-        if not value == 0:
-            Energy = Energy + (value - 1)**2
-    return Energy
-
-
-# This function tries all possible configurations for a block. If the
-# Block fits, it tries a new block. If it finishes the puzzle, it returns 1,
-# If it does not finish the puzzle, a nnew configuration is tried out
-
-# This function modifies the ShapeLocations and Cube
-# by replacing it with a neighbour.
-# It then reports the Energy Difference, and tells how it has changed the Cube
-# After applying this function, this allows the change to be reverted
-# This function can calculate the energy difference faster than
-# The energy function
-
-
-def SelectNeighbour(ShapeLocations, Cube, Rotations):
-    ShapeRemovedIndex = random.choice(range(len(ShapeLocations)))
-    ShapeRemoved = ShapeLocations[ShapeRemovedIndex]
-    EnergyDifference = 0
-    DecisionParameter = random.random()
-    if DecisionParameter > 0.5:  # Translate
-        NewShapeLocation = []
-        Translation = np.array(random.choice(
-            [[0, 0, 1], [1, 0, 0], [0, 1, 0], [0, 0, -1], [-1, 0, 0], [0, -1, 0]]))
-        for Location in ShapeRemoved:
-            NewShapeLocation.append(Translation + Location)
-
-    else:  # Rotate
-        RandomRotation = random.choice(Rotations)
-        NewShapeLocation = RotateShape(ShapeRemoved, RandomRotation)
-    if GoodShapeLocation(NewShapeLocation):
-        EnergyDifference += AddShape(Cube, NewShapeLocation)
-        EnergyDifference += RemoveShape(Cube, ShapeRemoved)
-        return (EnergyDifference, NewShapeLocation,
-                ShapeRemoved, ShapeRemovedIndex)
-    return 0, [], [], 0
-
-
-def GenerateBaseShapes():
-    ShapeL = [np.array([i, j, 0]) for i in range(4) for j in range(2)]
+def generate_base_shapes():
+    L_shape = [np.array([i, j, 0]) for i in range(4) for j in range(2)]
     for j in range(2):
-        ShapeL.append(np.array([3, j, 1]))
-    ShapeY = [np.array([i, j, 0]) for i in range(4) for j in range(2)]
+        L_shape.append(np.array([3, j, 1]))
+    Y_shape = [np.array([i, j, 0]) for i in range(4) for j in range(2)]
     for j in range(2):
-        ShapeY.append(np.array([2, j, 1]))
-    return ShapeL, ShapeY
+        Y_shape.append(np.array([2, j, 1]))
+    return L_shape, Y_shape
 
 
-def GenerateCube(CubeSize):
-    Cube = np.zeros((CubeSize, CubeSize, CubeSize))
-    Locations = [np.array([i, j, k]) for i in range(CubeSize)
-                 for j in range(CubeSize) for k in range(CubeSize)]
-    return Cube, Locations
+def generate_cube(cube_size):
+    cube = np.zeros((cube_size, cube_size, cube_size))
+    locations = [np.array([i, j, k]) for i in range(cube_size)
+                 for j in range(cube_size) for k in range(cube_size)]
+    return cube, locations
 
 
-def GenerateAllowedShapeLocations(Shape, ShapeConfigurations, CubeRotations):
-    PossibleShapeLocations = [GenerateShapeLocation(ShapeConfiguration,
-                                                    Shape, CubeRotations)
-                              for ShapeConfiguration in ShapeConfigurations]
-    ProperShapeLocations = [ShapeLocation for ShapeLocation in PossibleShapeLocations
-                            if GoodShapeLocation(ShapeLocation)]
-    ProperShapeConfigurations = [ShapeConfiguration for ShapeConfiguration in ShapeConfigurations
-                                 if GoodShapeLocation(GenerateShapeLocation( \
-                                    ShapeConfiguration, Shape, CubeRotations))]
-    return ProperShapeLocations, ProperShapeConfigurations
+def generate_allowed_shape_locations(shape, shape_configurations, cube_rotations):
+    possible_shape_locations = [generate_shape_location(shape_configuration,
+                                                    shape, cube_rotations)
+                              for shape_configuration in shape_configurations]
+
+    proper_shape_locations = [shape_location for shape_location
+                            in possible_shape_locations
+                            if good_shape_location(shape_location)]
+
+    proper_shape_configurations = [shape_configuration for shape_configuration
+                                 in shape_configurations
+                                 if good_shape_location(generate_shape_location(
+                                    shape_configuration, shape, cube_rotations))]
+    return proper_shape_locations, proper_shape_configurations
 
 
-def Overlap(Shape1, Shape2, CubeSize):
-    Cube = np.zeros((CubeSize, CubeSize, CubeSize))
-    AddShape(Cube, Shape1)
-    AddShape(Cube, Shape2)
-    if np.any(Cube > 1):
+def overlap(shape1, shape2, cube_size):
+    cube = np.zeros((cube_size, cube_size, cube_size))
+    add_shape(cube, shape1)
+    add_shape(cube, shape2)
+    if np.any(cube > 1):
         return 1
     return 0
 
 
-def NumberOfCombinations():
-    NCR = 1
+def number_of_combinations():
+    ncr = 1
     for i in range(6):
-        NCR = NCR * (768 - i)/(i + 1)
-        NCR = NCR**2
-    return NCR
+        ncr = ncr * (768 - i)/(i + 1)
+        ncr = ncr**2
+    return ncr
 
 
-def GenerateGraphEV():
-    # Generates the graph G = (E,V)
-    CubeSize = 5
-    ShapeL, ShapeY = GenerateBaseShapes()
-    Cube, Locations = GenerateCube(CubeSize)
-    RotationLabels = list(range(24))
+def generate_graph_EV():
+    """
+    Generate the graph G = (E,V)
+    119 seconds
+    """
+    cube_size = 5
+    L_shape, Y_shape = generate_base_shapes()
+    cube, locations = generate_cube(cube_size)
+    rotation_labels = list(range(24))
 
-    ShapeConfigurations = [[Location, RotationLabel] for Location in Locations
-                           for RotationLabel in RotationLabels]
+    shape_configurations = [[location, rotation_label] for location in locations
+                           for rotation_label in rotation_labels]
 
-    CubeRotations = GenerateCubeRotations()
+    cube_rotations = generate_cube_rotations()
 
-    ShapeLs, ShapeLConfigurations = GenerateAllowedShapeLocations(
-        ShapeL, ShapeConfigurations, CubeRotations)
-    ShapeYs, ShapeYConfigurations = GenerateAllowedShapeLocations(
-        ShapeY, ShapeConfigurations, CubeRotations)
+    L_shapes, L_shape_configurations = generate_allowed_shape_locations(
+        L_shape, shape_configurations, cube_rotations)
+    Y_shapes, Y_shape_configurations = generate_allowed_shape_locations(
+        Y_shape, shape_configurations, cube_rotations)
 
-    Shapes = ShapeYs + ShapeLs
+    shapes = Y_shapes + L_shapes
 
     E = []
-    for i in range(len(Shapes)):
+    for i in range(len(shapes)):
         for j in range(i):
-            if Overlap(Shapes[i], Shapes[j], CubeSize):
+            if overlap(shapes[i], shapes[j], cube_size):
                 E.append((i, j))
 
-    V = list(range(len(Shapes)))
+    V = list(range(len(shapes)))
+    """
     with open('saved_edges.pkl', 'wb') as f:
         pickle.dump(E, f)
     with open('saved_vertices.pkl', 'wb') as f:
         pickle.dump(V, f)
     with open('saved_shapes.pkl', 'wb') as f:
-        pickle.dump(Shapes, f)
-
-
-def GenerateNeighbourDictionary(E, V):
-    # Constructs graph dictionary from lists E,V with V immutable entries
-    NeighbourDict = {}
-    for i in V:
-        NeighbourDict[i] = []
-    for i, j in E:
-        NeighbourDict[i] = NeighbourDict[i] + [j]
-        NeighbourDict[j] = NeighbourDict[j] + [i]
-    with open('NeighbourDict.pkl', 'wb') as f:
-        pickle.dump(NeighbourDict, f)
-    return NeighbourDict
-
-
-def GenerateGraphArray(E, V):
+        pickle.dump(shapes, f)
     """
-    
+    return E, V
+
+
+def generate_neighbour_dictionary(E, V):
+    """
+    Construct graph dictionary from lists E,V.
+    3.2 seconds
 
     Parameters
     ----------
-    E : List of Edges, which are tuples (Vertex1,Vertex2)
+    E : TYPE
+        DESCRIPTION.
+    V : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    neighbour : TYPE
+        DESCRIPTION.
+    """
+
+    neighbour_dict = {}
+    for i in V:
+        neighbour_dict[i] = []
+    for i, j in E:
+        neighbour_dict[i] = neighbour_dict[i] + [j]
+        neighbour_dict[j] = neighbour_dict[j] + [i]
+
+    with open('neighbour_dict.pkl', 'wb') as f:
+        pickle.dump(neighbour_dict, f)
+
+    return neighbour_dict
+
+
+def generate_graph_array(E, V):
+    """
+    represent the graph as a square adjacency matrix.
+
+    Parameters
+    ----------
+    E : List of edges, which are tuples (vertex1,vertex2)
     V : List of vertices
 
     Returns
     -------
-    GraphArray : len(V) x len(V) np.array with True on edges. 
+    graph_array : len(V) x len(V) np.array with True on edges.
 
     """
-    GraphArray = np.zeros((len(V), len(V)), dtype = bool)
-    GraphArray.dtype
+    graph_array = np.zeros((len(V), len(V)), dtype=bool)
+    graph_array.dtype
     for i, j in E:
-        GraphArray[i, j] = 1
-        GraphArray[j, i] = 1
-    with open('GraphArray.pkl', 'wb') as f:
-        pickle.dump(GraphArray, f)
-    return GraphArray
+        graph_array[i, j] = 1
+        graph_array[j, i] = 1
+
+    with open('graph_array.pkl', 'wb') as f:
+        pickle.dump(graph_array, f)
+
+    return graph_array
 
 
-def InitializeAges(V):
-    AgeDict = {}
-    for Vertex in V:
-        AgeDict[Vertex] = 0
-    return AgeDict
-
-
-def InitializeEdgeWeights(E):
-    EdgeWeightsDict = {}
-    for edge in E:
-        EdgeWeightsDict[edge] = 1
-    return EdgeWeightsDict
-
-
-def InitializeDScores(V):
-    DScores = {}
-    for Vertex in V:
-        DScores[Vertex] = 0
-    return DScores
-
-
-def InitializeConfChange(V):
-    ConfChangeDict = {}
-    for Vertex in V:
-        ConfChangeDict[Vertex] = bool(1)
-    return ConfChangeDict
-
-
-def ConstructC():
-    C = []
-    return C
-
-
-def FindUnCoveredEdges(E, C):
-    UnCoveredEdges = []
-    return UnCoveredEdges
-
-
-def SortD(C, DScoresDict, Reverse):
-    # Sort S according to dscore from low to high. The elements with the
-    #  maximum dscore Should be sorted according to age.
-    DScores = []
-    for Vertex in C:
-        DScores.append(DScoresDict[Vertex])
-    CNew = [Vertex for (DScore, Vertex) in tuple(sorted(zip(DScores, C),
-                                                  key=lambda pair: pair[0],
-                                                  reverse=Reverse))]
-    return CNew
-
-
-def VertexSelect(VDataFrame):
+def find_uncovered_edges(E, C):
     """
-    The following is an attempt to improve the Vertex selection, but
-    it delivers worse results. Regardless of the preference this
-    has for specifically shaped blocks.
+    Genereate list of uncovered edge from list of all edges and list of
+    covering vertices.
+
+    Could be used to check update_uncovered, but much more computationally
+    expensive.
+
+    Parameters
+    ----------
+    E : List of edges of GraphG, tuples (vertex1, vertex2)
+    C : List of covering vertices, vertex, type int.
+
+    Returns
+    -------
+    uncovered_edges : TYPE
+        DESCRIPTION.
+
     """
-    CDataFrame = VDataFrame[VDataFrame['In C'] == True]
-    # Next line probably takes twice as long as necessary
-    DScoreMax = CDataFrame.at[CDataFrame.index[0], 'DScore']
-    IndicesMaxDScore = []
-    for Index in CDataFrame.index:
-        DScore = CDataFrame['DScore'].iat[0]
-        if DScore == DScoreMax:
-            IndicesMaxDScore.append(Index)
-        elif DScore > DScoreMax:
-            IndicesMaxDScore = []
-            IndicesMaxDScore.append(Index)
-            DScoreMax = DScore
-    Ages = [CDataFrame.at[Index, 'Age'] for Index in IndicesMaxDScore]
-    AgeMax = Ages[0]
-    IndicesMaxAge = []
-    for Index, Age in enumerate(Ages):
-        if Age == AgeMax:
-            IndicesMaxAge.append(Index)
-        elif Age > AgeMax:
-            IndicesMaxAge = []
-            IndicesMaxAge.append(Index)
-            AgeMax = Age
-    VertexSelection = [IndicesMaxDScore[Index] for Index in IndicesMaxAge]
-    Vertex = random.choice(VertexSelection)
-    return Vertex
+    uncovered_edges = []
+    for vertex1, vertex2 in E:
+        if vertex1 not in C:
+            if vertex2 not in C:
+                uncovered_edges.append(vertex1, vertex2)
+    return uncovered_edges
 
 
-def FindEdgeIndex(Vertex1, Vertex2, EdgeIndexDict):
-    assert Vertex1 != Vertex2
-    Vertex1, Vertex2 = tuple(sorted((Vertex1, Vertex2), reverse=True))
-    EdgeIndex = EdgeIndexDict[(Vertex1, Vertex2)]
-    return EdgeIndex
+def update_uncovered(in_C, uncovered_edges, vertex,  neighbour_dict, added):
+    # Updates the uncovered_edges set in EDataFrame After
+    # Adding (added = True) or removing (added = False) a vertex
+    assert in_C[vertex] == added
+    for vertex2 in neighbour_dict[vertex]:
+        if in_C[vertex2] == 0:
+            assert not vertex == vertex2
+            sorted_edge = tuple(sorted((vertex, vertex2), reverse=True))
 
-
-def UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
-                    EdgeIndexDict, Added):
-    # Updates the UnCoveredEdges set in EDataFrame After
-    # Adding (Added = 1) or removing (Added = 0) a Vertex
-    assert Cs[Vertex] == Added
-    for Vertex2 in NeighbourDict[Vertex]:
-        if Cs[Vertex2] == 0:
-            assert not Vertex == Vertex2
-            VertexHigh, VertexLow = tuple(sorted((Vertex, Vertex2),
-                                                 reverse=True))
-            Index = EdgeIndexDict[VertexHigh, VertexLow]
             """
-            print('Edge', (EDataFrame.at[Index,'Vertex1'],
-                           EDataFrame.at[Index,'Vertex2']),
-                  '\n Covered', EDataFrame.at[Index,'Covered'],
-                  '\n Added', Added,
-                  '\n VertexHigh,  VertexLow, Vertex, Vertex2',
-                  VertexHigh, VertexLow, Vertex, Vertex2)
+            print('edge', (EDataFrame.at[index,'vertex1'],
+                           EDataFrame.at[index,'vertex2']),
+                  '\n Covered', EDataFrame.at[index,'Covered'],
+                  '\n added', added,
+                  '\n vertexHigh,  vertexLow, vertex, vertex2',
+                  vertexHigh, vertexLow, vertex, vertex2)
             """
-            assert Uncovereds[Index] == Added
-            Uncovereds[Index] = not bool(Added)
-    return Uncovereds
-
-def UpdateUncovered(Cs, UncoveredEdges, Vertex,  NeighbourDict, Added):
-    # Updates the UnCoveredEdges set in EDataFrame After
-    # Adding (Added = True) or removing (Added = False) a Vertex
-    assert Cs[Vertex] == Added
-    for Vertex2 in NeighbourDict[Vertex]:
-        if Cs[Vertex2] == 0:
-            assert not Vertex == Vertex2
-            SortedEdge = tuple(sorted((Vertex, Vertex2), reverse=True))
-            
-            """
-            print('Edge', (EDataFrame.at[Index,'Vertex1'],
-                           EDataFrame.at[Index,'Vertex2']),
-                  '\n Covered', EDataFrame.at[Index,'Covered'],
-                  '\n Added', Added,
-                  '\n VertexHigh,  VertexLow, Vertex, Vertex2',
-                  VertexHigh, VertexLow, Vertex, Vertex2)
-            """
-            assert (SortedEdge in UncoveredEdges) == Added
-            if Added:
-                UncoveredEdges.remove(SortedEdge)
+            assert (sorted_edge in uncovered_edges) == added
+            if added:
+                uncovered_edges.remove(sorted_edge)
             else:
-                UncoveredEdges.append(SortedEdge)
-    return UncoveredEdges
+                uncovered_edges.append(sorted_edge)
+    return uncovered_edges
 
 
-
-def GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs, WeightArray, E):
+def globally_update_dscore(dscores, in_C, weight_array, E):
     """
     Update DScore for all Vertices
-    Time: ~37 seconds, i.e. Extremely Long
+    Time: Extremely Long
     The DScore of the vertex is the difference in cost when you flip the dict
     between C and Complement C. The cost is a function of the graph G and C,
     and consists of The sum of all weights of all edges not covered by C.
-    When a Vertex is not in C, adding it to C covers edges, therefore flipping
-    it decreases the cost, and therefore has a positive DScore. The Vertex with
+    When a vertex is not in C, adding it to C covers edges, therefore flipping
+    it decreases the cost, and therefore has a positive DScore. The vertex with
     the maximum DScore should be flipped to ensure minimum cost.
     When a vertex is in C it uncovers edges, and hence it has a negative
     DScore. The least negative DScore, i.e. the maximum DScore should be chosen
@@ -543,68 +363,67 @@ def GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs, WeightArray, E):
     calculate the cost for both scenarios but this requires at least to loop
     over all uncovered edges to calculate the DScore for adding a vertex,
     and all partially covered edges to calculate the DScore for removing a
-    Vertex. This Sounds Like it will take a long time, in particular for
+    vertex. This Sounds Like it will take a long time, in particular for
     removing a vertex. To make matters worse, for the current dataframes used
     we need to loop select all uncovered edges and partially covered edges
     which is O(|E|)
     """
-    # First reset the Dscore
-    Dscores = [0]*len(Dscores)
+    # First reset the dscore
+    dscores = [0]*len(dscores)
     # For each edge, check if the corresponding vertices are in C
-    for Vertex1,Vertex2 in E:
-        Vertex1InC = Cs[Vertex1]
-        Vertex2InC = Cs[Vertex2]
-        # If so, change the Dscore of the vertices appropriately
-        if Vertex1InC != Vertex2InC:  # x or
-            if Vertex1InC == True:
-                Dscores[Vertex1] += - WeightArray[Vertex1,Vertex2]
-            if Vertex2InC == True:
-                Dscores[Vertex2] += - WeightArray[Vertex1,Vertex2]
-        elif Vertex1InC == False and Vertex2InC == False:
-            Dscores[Vertex1] += WeightArray[Vertex1,Vertex2]
-            Dscores[Vertex2] += WeightArray[Vertex1,Vertex2]
-    return Dscores
+    for vertex1, vertex2 in E:
+        vertex1InC = in_C[vertex1]
+        vertex2InC = in_C[vertex2]
+        # If so, change the dscore of the vertices appropriately
+        if vertex1InC != vertex2InC:  # x or
+            if vertex1InC:
+                dscores[vertex1] += - weight_array[vertex1, vertex2]
+            if vertex2InC:
+                dscores[vertex2] += - weight_array[vertex1, vertex2]
+        elif (vertex1InC is False) and (vertex2InC is False):
+            dscores[vertex1] += weight_array[vertex1, vertex2]
+            dscores[vertex2] += weight_array[vertex1, vertex2]
+    return dscores
 
 
-def UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict, Vertex, Added):
-    # UpdateDScoreLocal and WeightUpdateDScore are tested, using GloballyUpdatedateDScore.
+def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex, added):
+    # update_dscore_local and weight_update_dscore are tested, using GloballyUpdatedateDScore.
     # But are >100 times faster. This code still takes up most of the time.
-    # It could perhaps be improvedEspecially if we track the indices of UnCovered
-    # Edges. The DScore for the Vertex changes to negative itself, because
-    # flipping the Vertex twice changes nothing, and therefore the cost
+    # The DScore for the vertex changes to negative itself, because
+    # flipping the vertex twice changes nothing, and therefore the cost
     # does not change, CostChange = -DScore added - DScore removed = 0
-    Dscores[Vertex] = -Dscores[Vertex]
-    if Added:   # If the Vertex is Added
-        for Neighbour in NeighbourDict[Vertex]:
-            SortedEdge = tuple(sorted((Vertex,Neighbour), reverse = True))
-            if Cs[Neighbour] == True:
-                # In this case, the edge no longer contributes to the DScore decrease if Neighbour is removed
-                # If edge Vertex, Neighbour is removed. Thus, DScore Improves by weight
-                Dscores[Neighbour] += + WeightArray[SortedEdge]
-            if Cs[Neighbour] == False:
+    dscores[vertex] = -dscores[vertex]
+    if added:   # If the vertex is added
+        for neighbour in neighbour_dict[vertex]:
+            sorted_edge = tuple(sorted((vertex, neighbour), reverse=True))
+            if in_C[neighbour]:
+                # In this case, the edge no longer contributes to the DScore decrease if neighbour is removed
+                # If edge vertex, neighbour is removed. Thus, DScore Improves by weight
+                dscores[neighbour] += + weight_array[sorted_edge]
+            else:
                 # In this case, the edge was not covered, but is now covered
-                # Therefore it no longer contributes to the DScore of the Neighbour
-                # For an Edge outside of C, each weight contributes positively
+                # Therefore it no longer contributes to the DScore of the neighbour
+                # For an edge outside of C, each weight contributes positively
                 # To the DScore, hence the DScore is affected negatively
-                # If edge Vertex, Neighbour is removed. Thus, DScore Improves
+                # If edge vertex, neighbour is removed. Thus, DScore Improves
                 # by weight
-                Dscores[Neighbour] += - WeightArray[SortedEdge]
-    else:       # If the Vertex is removed
-        for Neighbour in NeighbourDict[Vertex]:
-            SortedEdge = tuple(sorted((Vertex,Neighbour), reverse = True))
-            if Cs[Neighbour] == True:
+                dscores[neighbour] += - weight_array[sorted_edge]
+    else:       # If the vertex is removed
+        for neighbour in neighbour_dict[vertex]:
+            sorted_edge = tuple(sorted((vertex, neighbour), reverse=True))
+            if in_C[neighbour]:
                 # In this case, the edge starts to contribute negatively to the
-                # DScore decrease if Neighbour is removed
+                # DScore decrease if neighbour is removed
                 # Thus, DScore decreases by weight
 
-                Dscores[Neighbour] += - WeightArray[SortedEdge]
-            if Cs[Neighbour] == False:
+                dscores[neighbour] += - weight_array[sorted_edge]
+            else:
                 # In this case, the edge was covered, but is now not covered
-                # Therefore it now contributes to the DScore of the Neighbour
-                # For an Edge outside of C, each weight contributes positively
+                # Therefore it now contributes to the DScore of the neighbour
+                # For an edge outside of C, each weight contributes positively
                 # To the DScore, hence the DScore is affected positively
                 # Thus, DScore improves by weight
-                Dscores[Neighbour] += + WeightArray[SortedEdge]
+                dscores[neighbour] += + weight_array[sorted_edge]
     # We may choose to Calculate the DScore after a flip by Looping over the
     # neighbours of the neighbours.
     # If a neighbour is not in C, flipping The vertex flips the edge between
@@ -617,255 +436,205 @@ def UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict, Vertex, Added):
     # of this function is O(|V|^2), because we need to iterate over neighbours
     # of neighbours. This is rather large.
     # On the other hand, we may use the fact that flipping the DScore change
-    # The following
-    return Dscores
-
-# as of 19/03/2022 this one line takes up most of the time. It can be
-# avoided by tracking UncoveredIndexs instead of a function Edges -> {0,1}
-def UncoveredGen(Uncovereds):
-    return list(itertools.compress(range(len(Uncovereds)), Uncovereds))
-
-    
+    return dscores
 
 
-def WeightUpdateDScore(UncoveredEdges, Vertex1s, Vertex2s, Dscores):
+def weight_update_dscore(uncovered_edges, dscores):
+    """
+    Update the dscores at the end of the main loop.
+
+    Update is due to change in Weights of uncovered edges.
+
+    Parameters
+    ----------
+    uncovered_edges : list of edges; tuples (vertex1, vertex2), contained in E.
+    dscores : list of ints of length |V|
+
+    Returns
+    -------
+    dscores : Updated list of ints of length |V|
+
+    """
     # For indices of edges not covered
-    for Edge in UncoveredEdges:
+    for edge in uncovered_edges:
         # The weight increases by 1, since it contributes positively to
         # both vertices, since they are not in C, it affects the DScore by +1
-        Vertex1, Vertex2 = Edge
-        Dscores[Vertex1] += 1
-        Dscores[Vertex2] += 1
-    return Dscores
+        vertex1, vertex2 = edge
+        dscores[vertex1] += 1
+        dscores[vertex2] += 1
+    return dscores
 
 
-def ChooseAddedVertex(Edge, Confs, Dscores, Ages):
-    # Decision tree:
-    #    Choose Vertex with highest DScore with ConfChange = 1
-    #    If Vertices have equally high DScore and both ConfChange = 0:
-    #    Choose Oldest Vertex
-    # Usually, only one Vertex in an edge has ConfChange = 1
-    ReducedEdge = ()
-    REDscores = ()
-    REAges = ()
-    for Vertex in Edge:
-        if Confs[Vertex]:
-            ReducedEdge = ReducedEdge + (Vertex,)
-            REDscores = REDscores + (Dscores[Vertex],)
-            REAges = REAges + (Ages[Vertex],)
-    if len(ReducedEdge) == 1:
-        Vertex = ReducedEdge[0]
-    elif Dscores[0] > Dscores[1]:
-        Vertex = ReducedEdge[0]
-    elif Dscores[1] > Dscores[0]:
-        Vertex = ReducedEdge[1]
-    elif Ages[0] > Ages[1]:
-        Vertex = ReducedEdge[0]
+def choose_added_vertex(edge, confs, dscores, ages):
+    """
+    Choose vertex from edge to add to covering according to NuMVC algorithm.
+
+    Decision tree:
+       Choose vertex with highest DScore with ConfChange = 1
+       If Vertices have equally high DScore and both ConfChange = 0:
+       Choose Oldest vertex
+
+    Parameters
+    ----------
+    edge : Luple of int (vertex1, vertex2)
+    confs : List of bools of length |V|
+    dscores : List of ints of length |V|
+    ages : List of ints of length |V|
+
+    Returns
+    -------
+    vertex : int
+
+    """
+
+    reduced_edge = ()
+    re_dscores = ()
+    re_ages = ()
+    for vertex in edge:
+        if confs[vertex]:
+            reduced_edge = reduced_edge + (vertex,)
+            re_dscores = re_dscores + (dscores[vertex],)
+            re_ages = re_ages + (ages[vertex],)
+    if len(reduced_edge) == 1:
+        vertex = reduced_edge[0]
+    elif dscores[0] > dscores[1]:
+        vertex = reduced_edge[0]
+    elif dscores[1] > dscores[0]:
+        vertex = reduced_edge[1]
+    elif ages[0] > ages[1]:
+        vertex = reduced_edge[0]
     else:
-        Vertex = ReducedEdge[1]
-    return Vertex
-
-# Calculate the Average Outcome of a Series
-
-# Improvements: We could easily track the uncovered edges in a seperate dataframe
-# which is a 'subdataframe' of EDataFrame. It should have the same indices for
-# the same edges. Doing so would speed up computations dramatically, I believe,
-# Since we would eliminate most(?) O(|V|^2*#Steps) computations.
+        vertex = reduced_edge[1]
+    return vertex
 
 
-def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRate):
-    print('Building V')
-    VDataFrame = pd.DataFrame(V, columns=['Vertex'])
-    VDataFrame.Vertex.astype(int)
-    VDataFrame['In C'] = bool(1)
-    #    EdgeWeightsDict = InitializeEdgeWeights(E)
-    #    DScoresDict = InitializeDScores(V)
-    #    ConfChangeDict = InitializeConfChange(V)
-    #    AgeDict = InitializeAges(V)
-    VDataFrame['DScore'] = int(0)
+def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
+          weight_loss_rate):
 
-    VDataFrame['ConfChange'] = bool(1)
-    VDataFrame['Age'] = int(0)
-    print('Building E')
-    EDataFrame = pd.DataFrame(E, columns=['Vertex1', 'Vertex2'])
-    EDataFrame['Uncovered'] = bool(0)
-    EDataFrame['Weight'] = int(1)
-    
-    """
-    EdgeIndexDict = {}
+    print('Building state tracking structures')
 
-    print('Building E Dictionary')
-
-    for Index in EDataFrame.index:
-        EdgeIndexDict[EDataFrame.at[Index,'Vertex1'], EDataFrame.at[Index,'Vertex2']] = Index
-    """
-    print('Loading E Dictionary...')
-   # Vertexs = list(VDataFrame['Vertex'])
-    Cs = list(VDataFrame['In C'])
-    Dscores = list(VDataFrame['DScore'])
-    Confs = list(VDataFrame['ConfChange'])
-    Ages = list(VDataFrame['Age'])
-    Vertex1s = list(EDataFrame['Vertex1'])
-    Vertex2s = list(EDataFrame['Vertex2'])
-    # Uncovereds = list(EDataFrame['Uncovered'])
-    # Weights = list(EDataFrame['Weight'])
-    WeightArray = np.zeros((len(V),len(V)),dtype = int)
+    in_C = [bool(1)]*len(V)
+    dscores = [int(0)]*len(V)
+    confs = [bool(1)]*len(V)
+    ages = [int(0)]*len(V)
+    weight_array = np.zeros((len(V), len(V)), dtype=int)
     for i in range(len(V)):
         for j in range(len(V)):
             if i > j:
-                WeightArray[i,j] = int(GraphArray[i,j])
-    UncoveredEdges = []
-    
+                weight_array[i, j] = int(graph_array[i, j])
+    uncovered_edges = []
 
-    """
-    with open('EdgeIndexDict.pkl', 'rb') as f:
-        EdgeIndexDict = pickle.load(f)
-    
-    print('Checking E Dictionary')
-    for Vertex1,Vertex2 in EdgeIndexDict.keys():
-        Index = EdgeIndexDict[Vertex1,Vertex2]
-        assert EDataFrame.at[Index,'Vertex1'] == Vertex1 and EDataFrame.at[Index,'Vertex2'] == Vertex2
-    """
-
-    print('Copying DataFrame')
-    CoverCs = copy.deepcopy(Cs)
-    CounterStart = 0
-    CounterEnd = 0
-    CoverCounter = 0
+    print('Copying Cover')
+    cover_in_C = copy.deepcopy(in_C)
+    counter_start = 0
+    counter_end = 0
+    cover_counter = 0
     print('Starting Loop')
     InitialTime = time.time()
-    while time.time() - InitialTime < CutOffTime and CoverCounter < 13:
-        CounterStart += 1
+    while time.time() - InitialTime < cut_off_time and cover_counter < 13:
+        counter_start += 1
         """
-        for Vertex in Vertex1s:
-            assert isinstance(Vertex,int)
-        for Vertex in Vertex2s:
-            assert isinstance(Vertex,int)
-        for Weight in Weights:
-            assert isinstance(Weight,int)
-        for Vertex in Vertexs:
-            assert isinstance(Vertex, int)
-        for Bool in Cs:
+        for Bool in in_C:
             assert isinstance(Bool, bool)
-        for DScore in Dscores:
+        for DScore in dscores:
             assert isinstance(DScore,int)
-        for ConfChange in Confs:
+        for ConfChange in confs:
             assert isinstance(ConfChange,bool)
-        for Age in Ages:
-            assert isinstance(Age, int)
+        for age in ages:
+            assert isinstance(age, int)
         """
-        # If all edges are covered, remove a Vertex from C
-        if not UncoveredEdges:
+        # If all edges are covered, remove a vertex from C
+        if not uncovered_edges:
             print(time.time() - InitialTime,
-                  ' Removing Vertex number', CoverCounter)
-            # If C is empty, we cannot remove a Vertex and hence the loop is
+                  ' Removing vertex number', cover_counter)
+            # If C is empty, we cannot remove a vertex and hence the loop is
             # ended. This could only happen if a catastrophe occured.
-            if not any(Cs):
+            if not any(in_C):
                 print(time.time() - InitialTime)
                 print('Catastrophe')
                 break
 
-            CoverCs = copy.deepcopy(Cs)
-            
-            #Find first Vertex with max DScore in C
-            CIndices = list(itertools.compress(range(len(Cs)), Cs))
-            CDscores = list(itertools.compress(Dscores, Cs))
-            MaxDscore = max(CDscores)
-            SubIndexMax = random.choice([Index for Index in range(len(CDscores))
-                                         if CDscores[Index] == MaxDscore])
-            Vertex = CIndices[SubIndexMax]
-            assert Dscores[Vertex] <= 0
-            assert Cs[Vertex] == True
-            Cs[Vertex] = False
-            Ages[Vertex] = int(0)
-            Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray,
-                                        NeighbourDict, Vertex, Added=False)
-            # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
-            #                              EdgeIndexDict, Added=False)
-            UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
-                                             NeighbourDict, Added=False)
+            cover_in_C = copy.deepcopy(in_C)
 
-            CoverCounter += 1
+            # Find first vertex with max DScore in C
+            C_indices = list(itertools.compress(range(len(in_C)), in_C))
+            C_dscores = list(itertools.compress(dscores, in_C))
+            max_dscore = max(C_dscores)
+            sub_index_max = random.choice([index for index in range(len(C_dscores))
+                                         if C_dscores[index] == max_dscore])
+            vertex = C_indices[sub_index_max]
+            assert dscores[vertex] <= 0
+            assert in_C[vertex] == True
+            in_C[vertex] = False
+            ages[vertex] = int(0)
+            dscores = update_dscore_local(dscores, in_C, weight_array,
+                                        neighbour_dict, vertex, added=False)
+            uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                             neighbour_dict, added=False)
+
+            cover_counter += 1
             continue
-        
-        # Remove Vertex with highest DScore from C
-        CIndices = list(itertools.compress(range(len(Cs)), Cs))
-        CDscores = list(itertools.compress(Dscores, Cs))
-        MaxDscore = max(CDscores)
-        SubIndexMax = random.choice([Index for Index in range(len(CDscores))
-                                     if CDscores[Index] == MaxDscore])
-        Vertex = CIndices[SubIndexMax]
-        assert Dscores[Vertex] <= 0
-        assert Cs[Vertex] == True
-        Cs[Vertex] = False
 
-        #print(Vertex, 'In C', Cs[Vertex])
-        Confs[Vertex] = False
-        Ages[Vertex] = int(0)
-        for Neighbour in NeighbourDict[Vertex]:
-            Confs[Neighbour] = True
+        # Remove vertex with highest DScore from C
+        C_indices = list(itertools.compress(range(len(in_C)), in_C))
+        C_dscores = list(itertools.compress(dscores, in_C))
+        max_dscore = max(C_dscores)
+        sub_index_max = random.choice([index for index in range(len(C_dscores))
+                                     if C_dscores[index] == max_dscore])
+        vertex = C_indices[sub_index_max]
+        assert dscores[vertex] <= 0
+        assert in_C[vertex] == True
+        in_C[vertex] = False
 
-        # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex,  NeighbourDict,
-        #                            EdgeIndexDict, Added=False)
+        confs[vertex] = False
+        ages[vertex] = int(0)
+        for neighbour in neighbour_dict[vertex]:
+            confs[neighbour] = True
 
-        UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
-                                         NeighbourDict, Added=False)
+        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                         neighbour_dict, added=False)
 
-        Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict,
-                                    Vertex, Added=False)
+        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
+                                    vertex, added=False)
 
-        # It is not necessary to explicitly update list Dscores = .. etc.
+        # It is not necessary to explicitly update list dscores = .. etc.
         # since it is already changed inside function
 
-        # Takes 0.011s, better method? Store uncovered edges somewhere
-        # Add Vertex in random uncovered edge to C)
-        # UncoveredIndexs = []
-        # for i, Covered in enumerate(Covereds):
-        #     if not Covered:
-        #         UncoveredIndexs.append(i)
-        # UncoveredIndexs = UncoveredGen(Uncovereds)
-        # EIndex = random.choice(UncoveredIndexs)
-        
-        # Edge = Vertex1s[EIndex], Vertex2s[EIndex]
-        Edge = random.choice(UncoveredEdges)
-        Vertex = ChooseAddedVertex(Edge, Confs, Dscores, Ages)
+        edge = random.choice(uncovered_edges)
+        vertex = choose_added_vertex(edge, confs, dscores, ages)
 
-        assert Dscores[Vertex] >= 0
-        Cs[Vertex] = True
-        Ages[Vertex] = int(0)
-        for Neighbour in NeighbourDict[Vertex]:
-            Confs[Neighbour] = True
+        assert dscores[vertex] >= 0
+        in_C[vertex] = True
+        ages[vertex] = int(0)
+        for neighbour in neighbour_dict[vertex]:
+            confs[neighbour] = True
 
-        # Uncovereds = UpdateEdgeCover(Cs, Uncovereds, Vertex, NeighbourDict,
-        #                            EdgeIndexDict, Added=True)
-        UncoveredEdges = UpdateUncovered(Cs, UncoveredEdges, Vertex,
-                                         NeighbourDict, Added=True)
-        Dscores = UpdateDScoreLocal(Dscores, Cs, WeightArray, NeighbourDict,
-                                    Vertex, Added=True)
-        # UncoveredIndexs = UncoveredGen(Uncovereds)
+        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                         neighbour_dict, added=True)
+        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
+                                    vertex, added=True)
 
-        for Edge in UncoveredEdges:
-            WeightArray[Edge] += 1
-        Dscores = WeightUpdateDScore(UncoveredEdges, Vertex1s, Vertex2s, Dscores)
-        
-        for Vertex in range(len(Ages)):
-            Ages[Vertex] += 1
-        W = np.sum(WeightArray)/len(E)
-        if W > WeightLimit:
-            for Edge in E:
-                WeightArray[Edge] = math.ceil(
-                    WeightArray[Edge]*WeightLossRate)
-                Dscores = GloballyUpdateDScore(Dscores, Vertex1s, Vertex2s, Cs,
-                                               WeightArray, E)
+        for edge in uncovered_edges:
+            weight_array[edge] += 1
+        dscores = weight_update_dscore(uncovered_edges, dscores)
+
+        for vertex in range(len(ages)):
+            ages[vertex] += 1
+        average_weight = np.sum(weight_array)/len(E)
+        if average_weight > weight_limit:
+            for edge in E:
+                weight_array[edge] = math.ceil(
+                    weight_array[edge]*weight_loss_rate)
+                dscores = globally_update_dscore(dscores, in_C, weight_array, E)
                 print('Weights partially forgotten')
-        CounterEnd += 1
+        counter_end += 1
     else:
         print('Time is out')
 
-    print('CounterStart', CounterStart,
-          '\n', 'CounterEnd', CounterEnd,
-          '\n CoverCounter', CoverCounter)
-    return CoverCs, Cs, Dscores, Confs, Ages, UncoveredEdges, WeightArray
+    print('counter_start', counter_start,
+          '\n', 'counter_end', counter_end,
+          '\n cover_counter', cover_counter)
+    return cover_in_C, in_C, dscores, confs, ages, uncovered_edges, weight_array
 
     """
     (G,cutoff)
@@ -882,7 +651,7 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     10  remove a vertex with the highest dscore from C;
     11  continue;
     12 choose a vertex u ∈ C with the highest dscore, breaking
-        ties in favor of the oldest one; to be tested and Age implemented
+        ties in favor of the oldest one; to be tested and age implemented
     13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1 for each z ∈ N(u);
     14 choose an uncovered edge e randomly;
     15 choose a vertex v ∈ e such that confChange(v) = 1 with higher dscore,
@@ -894,60 +663,57 @@ def NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, WeightLossRa
     20 end check
     """
 
+
 def main():
     """
-    Load the data representing the graph and call the main loop. Then save
+    Load the data representing the graph and call the main loop. Then dump
     the generated data, the minimal vertex coverings and the edge weights
-    in particular to csv files. +
-    
+    in particular to pickle files.
+
     Returns
     -------
     None.
 
     """
-    WeightLimit = 100
-    WeightLossRate = 0.5
-    CutOffTime = 100
+    weight_limit = 100
+    weight_loss_rate = 0.5
+    cut_off_time = 1
     # duration of algorithm in seconds
 
     with open('saved_edges.pkl', 'rb') as f:
         E = pickle.load(f)
     with open('saved_vertices.pkl', 'rb') as f:
         V = pickle.load(f)
-    with open('NeighbourDict.pkl', 'rb') as f:
-        NeighbourDict = pickle.load(f)
-    with open('GraphArray.pkl', 'rb') as f:
-        GraphArray = pickle.load(f)
+    with open('neighbour_dict.pkl', 'rb') as f:
+        neighbour_dict = pickle.load(f)
+    with open('graph_array.pkl', 'rb') as f:
+        graph_array = pickle.load(f)
 
-    CoverCs, Cs, Dscores, Confs, Ages, UncoveredEdges, WeightArray = \
-        NuMVC(E, V, NeighbourDict, GraphArray, CutOffTime, WeightLimit, 
-              WeightLossRate)
-    print(CoverCs)
+    cover_in_C, in_C, dscores, confs, ages, uncovered_edges, weight_array = \
+        NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
+              weight_loss_rate)
     with open('CoverC.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(CoverCs, f, pickle.HIGHEST_PROTOCOL)
-    with open('Cs.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Cs, f, pickle.HIGHEST_PROTOCOL)
-    with open('Dscores.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Dscores, f, pickle.HIGHEST_PROTOCOL)
-    with open('Confs.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Confs, f, pickle.HIGHEST_PROTOCOL)
-    with open('Ages.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(Ages, f, pickle.HIGHEST_PROTOCOL)
-    with open('UncoveredEdges.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(UncoveredEdges, f, pickle.HIGHEST_PROTOCOL)
-    with open('WeightArray.pkl', 'wb') as f:
-    # Pickle the 'data' dictionary using the highest protocol available.
-        pickle.dump(WeightArray, f, pickle.HIGHEST_PROTOCOL)
-        
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(cover_in_C, f, pickle.HIGHEST_PROTOCOL)
+    with open('in_C.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(in_C, f, pickle.HIGHEST_PROTOCOL)
+    with open('dscores.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(dscores, f, pickle.HIGHEST_PROTOCOL)
+    with open('confs.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(confs, f, pickle.HIGHEST_PROTOCOL)
+    with open('ages.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(ages, f, pickle.HIGHEST_PROTOCOL)
+    with open('uncovered_edges.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(uncovered_edges, f, pickle.HIGHEST_PROTOCOL)
+    with open('weight_array.pkl', 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(weight_array, f, pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == "__main__":
     main()
-
-
-    
