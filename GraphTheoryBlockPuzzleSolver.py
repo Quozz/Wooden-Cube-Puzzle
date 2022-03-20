@@ -69,7 +69,7 @@ def rotate_shape(shape, rotation):
     average = total_sum/len(shape)
     mid_point = np.rint(average).astype(int)
     rotated_shape = [np.rint(np.matmul(rotation, location - mid_point)
-                            + mid_point).astype(int) for location in shape]
+                             + mid_point).astype(int) for location in shape]
     return rotated_shape
 
 
@@ -167,17 +167,17 @@ def generate_cube(cube_size):
 
 def generate_allowed_shape_locations(shape, shape_configurations, cube_rotations):
     possible_shape_locations = [generate_shape_location(shape_configuration,
-                                                    shape, cube_rotations)
-                              for shape_configuration in shape_configurations]
+                                                        shape, cube_rotations)
+                                for shape_configuration in shape_configurations]
 
     proper_shape_locations = [shape_location for shape_location
-                            in possible_shape_locations
-                            if good_shape_location(shape_location)]
+                              in possible_shape_locations
+                              if good_shape_location(shape_location)]
 
     proper_shape_configurations = [shape_configuration for shape_configuration
-                                 in shape_configurations
-                                 if good_shape_location(generate_shape_location(
-                                    shape_configuration, shape, cube_rotations))]
+                                   in shape_configurations
+                                   if good_shape_location(generate_shape_location(
+                                       shape_configuration, shape, cube_rotations))]
     return proper_shape_locations, proper_shape_configurations
 
 
@@ -205,17 +205,17 @@ def generate_graph_EV():
     """
     cube_size = 5
     L_shape, Y_shape = generate_base_shapes()
-    cube, locations = generate_cube(cube_size)
+    _, locations = generate_cube(cube_size)
     rotation_labels = list(range(24))
 
     shape_configurations = [[location, rotation_label] for location in locations
-                           for rotation_label in rotation_labels]
+                            for rotation_label in rotation_labels]
 
     cube_rotations = generate_cube_rotations()
 
-    L_shapes, L_shape_configurations = generate_allowed_shape_locations(
+    L_shapes, _ = generate_allowed_shape_locations(
         L_shape, shape_configurations, cube_rotations)
-    Y_shapes, Y_shape_configurations = generate_allowed_shape_locations(
+    Y_shapes, _ = generate_allowed_shape_locations(
         Y_shape, shape_configurations, cube_rotations)
 
     shapes = Y_shapes + L_shapes
@@ -284,7 +284,6 @@ def generate_graph_array(E, V):
 
     """
     graph_array = np.zeros((len(V), len(V)), dtype=bool)
-    graph_array.dtype
     for i, j in E:
         graph_array[i, j] = 1
         graph_array[j, i] = 1
@@ -510,133 +509,11 @@ def choose_added_vertex(edge, confs, dscores, ages):
 
 def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
           weight_loss_rate):
-
-    print('Building state tracking structures')
-
-    in_C = [bool(1)]*len(V)
-    dscores = [int(0)]*len(V)
-    confs = [bool(1)]*len(V)
-    ages = [int(0)]*len(V)
-    weight_array = np.zeros((len(V), len(V)), dtype=int)
-    for i in range(len(V)):
-        for j in range(len(V)):
-            if i > j:
-                weight_array[i, j] = int(graph_array[i, j])
-    uncovered_edges = []
-
-    print('Copying Cover')
-    cover_in_C = copy.deepcopy(in_C)
-    counter_start = 0
-    counter_end = 0
-    cover_counter = 0
-    print('Starting Loop')
-    InitialTime = time.time()
-    while time.time() - InitialTime < cut_off_time and cover_counter < 13:
-        counter_start += 1
-        """
-        for Bool in in_C:
-            assert isinstance(Bool, bool)
-        for DScore in dscores:
-            assert isinstance(DScore,int)
-        for ConfChange in confs:
-            assert isinstance(ConfChange,bool)
-        for age in ages:
-            assert isinstance(age, int)
-        """
-        # If all edges are covered, remove a vertex from C
-        if not uncovered_edges:
-            print(time.time() - InitialTime,
-                  ' Removing vertex number', cover_counter)
-            # If C is empty, we cannot remove a vertex and hence the loop is
-            # ended. This could only happen if a catastrophe occured.
-            if not any(in_C):
-                print(time.time() - InitialTime)
-                print('Catastrophe')
-                break
-
-            cover_in_C = copy.deepcopy(in_C)
-
-            # Find first vertex with max DScore in C
-            C_indices = list(itertools.compress(range(len(in_C)), in_C))
-            C_dscores = list(itertools.compress(dscores, in_C))
-            max_dscore = max(C_dscores)
-            sub_index_max = random.choice([index for index in range(len(C_dscores))
-                                         if C_dscores[index] == max_dscore])
-            vertex = C_indices[sub_index_max]
-            assert dscores[vertex] <= 0
-            assert in_C[vertex] == True
-            in_C[vertex] = False
-            ages[vertex] = int(0)
-            dscores = update_dscore_local(dscores, in_C, weight_array,
-                                        neighbour_dict, vertex, added=False)
-            uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
-                                             neighbour_dict, added=False)
-
-            cover_counter += 1
-            continue
-
-        # Remove vertex with highest DScore from C
-        C_indices = list(itertools.compress(range(len(in_C)), in_C))
-        C_dscores = list(itertools.compress(dscores, in_C))
-        max_dscore = max(C_dscores)
-        sub_index_max = random.choice([index for index in range(len(C_dscores))
-                                     if C_dscores[index] == max_dscore])
-        vertex = C_indices[sub_index_max]
-        assert dscores[vertex] <= 0
-        assert in_C[vertex] == True
-        in_C[vertex] = False
-
-        confs[vertex] = False
-        ages[vertex] = int(0)
-        for neighbour in neighbour_dict[vertex]:
-            confs[neighbour] = True
-
-        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
-                                         neighbour_dict, added=False)
-
-        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
-                                    vertex, added=False)
-
-        # It is not necessary to explicitly update list dscores = .. etc.
-        # since it is already changed inside function
-
-        edge = random.choice(uncovered_edges)
-        vertex = choose_added_vertex(edge, confs, dscores, ages)
-
-        assert dscores[vertex] >= 0
-        in_C[vertex] = True
-        ages[vertex] = int(0)
-        for neighbour in neighbour_dict[vertex]:
-            confs[neighbour] = True
-
-        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
-                                         neighbour_dict, added=True)
-        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
-                                    vertex, added=True)
-
-        for edge in uncovered_edges:
-            weight_array[edge] += 1
-        dscores = weight_update_dscore(uncovered_edges, dscores)
-
-        for vertex in range(len(ages)):
-            ages[vertex] += 1
-        average_weight = np.sum(weight_array)/len(E)
-        if average_weight > weight_limit:
-            for edge in E:
-                weight_array[edge] = math.ceil(
-                    weight_array[edge]*weight_loss_rate)
-                dscores = globally_update_dscore(dscores, in_C, weight_array, E)
-                print('Weights partially forgotten')
-        counter_end += 1
-    else:
-        print('Time is out')
-
-    print('counter_start', counter_start,
-          '\n', 'counter_end', counter_end,
-          '\n cover_counter', cover_counter)
-    return cover_in_C, in_C, dscores, confs, ages, uncovered_edges, weight_array
-
     """
+    Implement the an efficient algorithm to find the Minimum Vertex Cover,
+    using two stage vertex interchange and edge weighting with forgetting.
+
+    The Algorithm is as follows:
     (G,cutoff)
     Input: graph G = (V,E), the cutoff time
     Output: vertex cover of G
@@ -661,7 +538,185 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
     19 return C∗; check
     20 end check
+
+    Parameters
+    ----------
+    E : TYPE
+        DESCRIPTION.
+    V : TYPE
+        DESCRIPTION.
+    neighbour_dict : TYPE
+        DESCRIPTION.
+    graph_array : TYPE
+        DESCRIPTION.
+    cut_off_time : TYPE
+        DESCRIPTION.
+    weight_limit : TYPE
+        DESCRIPTION.
+    weight_loss_rate : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    cover_in_C : TYPE
+        DESCRIPTION.
+    in_C : TYPE
+        DESCRIPTION.
+    dscores : TYPE
+        DESCRIPTION.
+    confs : TYPE
+        DESCRIPTION.
+    ages : TYPE
+        DESCRIPTION.
+    uncovered_edges : TYPE
+        DESCRIPTION.
+    weight_array : TYPE
+        DESCRIPTION.
     """
+
+    print('Building state tracking structures')
+
+    # 3 initialize edge weights and dscores of vertices;
+    dscores = [int(0)]*len(V)
+    ages = [int(0)]*len(V)
+    weight_array = np.zeros((len(V), len(V)), dtype=int)
+
+    # 4 initialize the confChange array as an all-1 array;
+    confs = [bool(1)]*len(V)
+    for i in range(len(V)):
+        for j in range(len(V)):
+            if i > j:
+                weight_array[i, j] = int(graph_array[i, j])
+    uncovered_edges = []
+
+    # 5 construct C greedily until it is a vertex cover; - just C = V
+    in_C = [bool(1)]*len(V)
+
+    # 6 C∗ := C;
+    cover_in_C = copy.deepcopy(in_C)
+    counter_start = 0
+    counter_end = 0
+    cover_counter = 0
+    print('Starting Loop')
+    InitialTime = time.time()
+    # 7 while elapsed time < cutoff and MVC not yet obtained do
+    while time.time() - InitialTime < cut_off_time and cover_counter < 13:
+        counter_start += 1
+        """
+        for Bool in in_C:
+            assert isinstance(Bool, bool)
+        for DScore in dscores:
+            assert isinstance(DScore,int)
+        for ConfChange in confs:
+            assert isinstance(ConfChange,bool)
+        for age in ages:
+            assert isinstance(age, int)
+        """
+        # 8   if there is no uncovered edge then
+        if not uncovered_edges:
+            print(time.time() - InitialTime,
+                  ' Removing vertex number', cover_counter)
+            # If C is empty, we cannot remove a vertex and hence the loop is
+            # ended. This could only happen if a catastrophe occured.
+            if not any(in_C):
+                print(time.time() - InitialTime)
+                print('Catastrophe')
+                break
+            # 9   C∗ := C;
+
+            cover_in_C = copy.deepcopy(in_C)
+            # 10  remove a vertex with the highest dscore from C;
+
+            # Find a rendom vertex with max DScore in C
+            C_indices = list(itertools.compress(range(len(in_C)), in_C))
+            C_dscores = list(itertools.compress(dscores, in_C))
+            max_dscore = max(C_dscores)
+            sub_index_max = random.choice([index for index in range(len(C_dscores))
+                                           if C_dscores[index] == max_dscore])
+            vertex = C_indices[sub_index_max]
+            assert dscores[vertex] <= 0
+            assert in_C[vertex] == True
+            in_C[vertex] = False
+            ages[vertex] = int(0)
+            dscores = update_dscore_local(dscores, in_C, weight_array,
+                                          neighbour_dict, vertex, added=False)
+            uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                               neighbour_dict, added=False)
+
+            cover_counter += 1
+            # 11  continue;
+            continue
+
+        # 12 choose a vertex u ∈ C with the highest dscore, breaking
+        # ties in favor of the oldest one; to be tested and age implemented
+        C_indices = list(itertools.compress(range(len(in_C)), in_C))
+        C_dscores = list(itertools.compress(dscores, in_C))
+        max_dscore = max(C_dscores)
+        sub_index_max = random.choice([index for index in range(len(C_dscores))
+                                       if C_dscores[index] == max_dscore])
+        vertex = C_indices[sub_index_max]
+
+        # 13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1
+        # for each z ∈ N(u);
+        assert dscores[vertex] <= 0
+        assert in_C[vertex] is True
+        in_C[vertex] = False
+
+        confs[vertex] = False
+        ages[vertex] = int(0)
+        for neighbour in neighbour_dict[vertex]:
+            confs[neighbour] = True
+
+        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                           neighbour_dict, added=False)
+
+        dscores = update_dscore_local(dscores, in_C, weight_array,
+                                      neighbour_dict, vertex, added=False)
+
+        # 14 choose an uncovered edge e randomly;
+        edge = random.choice(uncovered_edges)
+
+        # 15 choose a vertex v ∈ e such that confChange(v) = 1 with higher
+        # dscore, breaking ties in favor of the older one;
+        vertex = choose_added_vertex(edge, confs, dscores, ages)
+
+        # 16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);
+        assert dscores[vertex] >= 0
+        in_C[vertex] = True
+        ages[vertex] = int(0)
+        for neighbour in neighbour_dict[vertex]:
+            confs[neighbour] = True
+
+        uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
+                                           neighbour_dict, added=True)
+        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
+                                      vertex, added=True)
+        # 17 w(e) := w(e) + 1 for each uncovered edge e;  check
+        for edge in uncovered_edges:
+            weight_array[edge] += 1
+        dscores = weight_update_dscore(uncovered_edges, dscores)
+
+        for vertex in range(len(ages)):
+            ages[vertex] += 1
+        average_weight = np.sum(weight_array)/len(E)
+
+        # 18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
+        if average_weight > weight_limit:
+            for edge in E:
+                weight_array[edge] = math.ceil(
+                    weight_array[edge]*weight_loss_rate)
+                dscores = globally_update_dscore(
+                    dscores, in_C, weight_array, E)
+                print('Weights partially forgotten')
+        counter_end += 1
+    else:
+        print('Time is out')
+
+    print('counter_start', counter_start,
+          '\n', 'counter_end', counter_end,
+          '\n cover_counter', cover_counter)
+    # 19 return C∗; check
+    return cover_in_C, in_C, dscores, confs, ages, uncovered_edges, weight_array
 
 
 def main():
