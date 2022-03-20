@@ -634,12 +634,12 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     while time.time() - InitialTime < cut_off_time and cover_counter < 13:
         counter_start += 1
         """
-        for Bool in in_C:
-            assert isinstance(Bool, bool)
-        for DScore in dscores:
-            assert isinstance(DScore,int)
-        for ConfChange in confs:
-            assert isinstance(ConfChange,bool)
+        for boolean in in_C:
+            assert isinstance(boolean, bool)
+        for dscore in dscores:
+            assert isinstance(dscore,int)
+        for conf_change in confs:
+            assert isinstance(conf_change,bool)
         for age in ages:
             assert isinstance(age, int)
         """
@@ -746,10 +746,11 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     print('counter_start', counter_start,
           '\n', 'counter_end', counter_end,
           '\n cover_counter', cover_counter)
-    Y_in_C = in_C[:768]
-    L_in_C = in_C[768:]
-    print(len(Y_in_C), len(L_in_C))
-    
+    Y_in_cover = cover_in_C[:768]
+    L_in_cover = cover_in_C[768:]
+    print('Y pieces: ', len(Y_in_cover) - sum(Y_in_cover),
+          '\nL pieces: ', len(L_in_cover) - sum(L_in_cover))
+
     # 19 return C∗; check
     return (cover_in_C, in_C, dscores, confs, ages,
             uncovered_edges, weight_array)
