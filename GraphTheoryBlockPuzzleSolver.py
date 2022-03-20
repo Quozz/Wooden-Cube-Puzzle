@@ -73,19 +73,19 @@ def rotate_shape(shape, rotation):
     return rotated_shape
 
 
-def generate_shape_location(shape_configuration, shape, cube_rotations):
+def generate_shape_location(shape_config, shape, cube_rotations):
     """
     Transform a shape by a rotation and then a translation.
 
     Parameters
     ----------
-    shape_configuration : A tuple of length two containing at index 0 a np.array
+    shape_config : A tuple of length two containing at index 0 a np.array
     of length 3 representing a translation, and at index 1 an index describing
     a rotation
     shape : The np.arrays of length 3 representing the untransformed locations
     of a shape
     cube_rotations : a list of 24 rotations which correspond to the index in
-    shape_configuration[1]
+    shape_config[1]
 
     Returns
     -------
@@ -93,8 +93,8 @@ def generate_shape_location(shape_configuration, shape, cube_rotations):
     It first rotates the shape and  the translates the shape
 
     """
-    rotation = cube_rotations[shape_configuration[1]]
-    translation = shape_configuration[0]
+    rotation = cube_rotations[shape_config[1]]
+    translation = shape_config[0]
     rotated_shape = [np.matmul(rotation, location) for location in shape]
     translated_shape = [np.rint(np.add(translation, location)).astype(
         int) for location in rotated_shape]
@@ -165,20 +165,20 @@ def generate_cube(cube_size):
     return cube, locations
 
 
-def generate_allowed_shape_locations(shape, shape_configurations, cube_rotations):
-    possible_shape_locations = [generate_shape_location(shape_configuration,
+def generate_allowed_shape_locations(shape, shape_configs, cube_rotations):
+    possible_shape_locations = [generate_shape_location(shape_config,
                                                         shape, cube_rotations)
-                                for shape_configuration in shape_configurations]
+                                for shape_config in shape_configs]
 
     proper_shape_locations = [shape_location for shape_location
                               in possible_shape_locations
                               if good_shape_location(shape_location)]
 
-    proper_shape_configurations = [shape_configuration for shape_configuration
-                                   in shape_configurations
-                                   if good_shape_location(generate_shape_location(
-                                       shape_configuration, shape, cube_rotations))]
-    return proper_shape_locations, proper_shape_configurations
+    proper_shape_configs = [shape_config for shape_config
+                            in shape_configs
+                            if good_shape_location(generate_shape_location(
+                                    shape_config, shape, cube_rotations))]
+    return proper_shape_locations, proper_shape_configs
 
 
 def overlap(shape1, shape2, cube_size):
@@ -208,15 +208,15 @@ def generate_graph_EV():
     _, locations = generate_cube(cube_size)
     rotation_labels = list(range(24))
 
-    shape_configurations = [[location, rotation_label] for location in locations
-                            for rotation_label in rotation_labels]
+    shape_configs = [[location, rotation_label] for location in
+                     locations for rotation_label in rotation_labels]
 
     cube_rotations = generate_cube_rotations()
 
     L_shapes, _ = generate_allowed_shape_locations(
-        L_shape, shape_configurations, cube_rotations)
+        L_shape, shape_configs, cube_rotations)
     Y_shapes, _ = generate_allowed_shape_locations(
-        Y_shape, shape_configurations, cube_rotations)
+        Y_shape, shape_configs, cube_rotations)
 
     shapes = Y_shapes + L_shapes
 
@@ -385,9 +385,39 @@ def globally_update_dscore(dscores, in_C, weight_array, E):
     return dscores
 
 
-def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex, added):
-    # update_dscore_local and weight_update_dscore are tested, using GloballyUpdatedateDScore.
-    # But are >100 times faster. This code still takes up most of the time.
+def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
+                        added):
+    """
+    Efficiently update dscores after vertex is added.
+
+    update_dscore_local is tested, using GloballyUpdatedateDScore. But is
+    >100 times faster. This code takes up a large portion of computational
+    power.
+
+    Parameters
+    ----------
+    dscores : List of integers
+        Contains dscores of all vertices, vertices correspond to labels
+    in_C : list of bools
+        Vertex corresponding to index is in C if in_C[Vertex] == 1
+    weight_array : int array len(V) x len(V)
+        Contains the weights of all edges, pairs of vertices (vertex1, vertex2)
+        can be used as index, with vertex1 > vertex2. All other entries are 0,
+        Also 0 if pair of vertices is not an edge.
+    neighbour_dict : Dictionary
+        key = vertex, value = list of neighbours of vertex
+    vertex : Integer
+        An integer corresponding to an index in the graph used for indexing
+    added : Bool
+        Whether a vertex is added (True) or removed (False).
+
+    Returns
+    -------
+    dscores : List of integers
+        Contains updated dscores of all vertices, vertices correspond to labels
+
+    """
+
     # The DScore for the vertex changes to negative itself, because
     # flipping the vertex twice changes nothing, and therefore the cost
     # does not change, CostChange = -DScore added - DScore removed = 0
@@ -396,16 +426,17 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex, add
         for neighbour in neighbour_dict[vertex]:
             sorted_edge = tuple(sorted((vertex, neighbour), reverse=True))
             if in_C[neighbour]:
-                # In this case, the edge no longer contributes to the DScore decrease if neighbour is removed
-                # If edge vertex, neighbour is removed. Thus, DScore Improves by weight
+                # In this case, the edge no longer contributes to the DScore
+                # decrease if neighbour is removed. If edge vertex, neighbour
+                # is removed. Thus, DScore Improves by weight
                 dscores[neighbour] += + weight_array[sorted_edge]
             else:
                 # In this case, the edge was not covered, but is now covered
-                # Therefore it no longer contributes to the DScore of the neighbour
-                # For an edge outside of C, each weight contributes positively
-                # To the DScore, hence the DScore is affected negatively
-                # If edge vertex, neighbour is removed. Thus, DScore Improves
-                # by weight
+                # Therefore it no longer contributes to the DScore of the
+                # neighbour. For an edge outside of C, each weight contributes
+                # positively to the DScore, hence the DScore is affected
+                # negatively If edge vertex, neighbour is removed. Thus, DScore
+                # Improves by weight
                 dscores[neighbour] += - weight_array[sorted_edge]
     else:       # If the vertex is removed
         for neighbour in neighbour_dict[vertex]:
@@ -529,7 +560,7 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     11  continue;
     12 choose a vertex u ∈ C with the highest dscore, breaking
         ties in favor of the oldest one; to be tested and age implemented
-    13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1 for each z ∈ N(u);
+    13 C := C\{u}, confChange(u) := 0, confChange(z) := 1 for each z ∈ N(u);
     14 choose an uncovered edge e randomly;
     15 choose a vertex v ∈ e such that confChange(v) = 1 with higher dscore,
     breaking ties in favor of the older one; To Break ties
@@ -631,11 +662,12 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
             C_indices = list(itertools.compress(range(len(in_C)), in_C))
             C_dscores = list(itertools.compress(dscores, in_C))
             max_dscore = max(C_dscores)
-            sub_index_max = random.choice([index for index in range(len(C_dscores))
+            sub_index_max = random.choice([index for index in
+                                           range(len(C_dscores))
                                            if C_dscores[index] == max_dscore])
             vertex = C_indices[sub_index_max]
             assert dscores[vertex] <= 0
-            assert in_C[vertex] == True
+            assert in_C[vertex] is True
             in_C[vertex] = False
             ages[vertex] = int(0)
             dscores = update_dscore_local(dscores, in_C, weight_array,
@@ -689,13 +721,12 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
 
         uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
                                            neighbour_dict, added=True)
-        dscores = update_dscore_local(dscores, in_C, weight_array, neighbour_dict,
-                                      vertex, added=True)
+        dscores = update_dscore_local(dscores, in_C, weight_array,
+                                      neighbour_dict, vertex, added=True)
         # 17 w(e) := w(e) + 1 for each uncovered edge e;  check
         for edge in uncovered_edges:
             weight_array[edge] += 1
         dscores = weight_update_dscore(uncovered_edges, dscores)
-
         for vertex in range(len(ages)):
             ages[vertex] += 1
         average_weight = np.sum(weight_array)/len(E)
@@ -715,8 +746,13 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     print('counter_start', counter_start,
           '\n', 'counter_end', counter_end,
           '\n cover_counter', cover_counter)
+    Y_in_C = in_C[:768]
+    L_in_C = in_C[768:]
+    print(len(Y_in_C), len(L_in_C))
+    
     # 19 return C∗; check
-    return cover_in_C, in_C, dscores, confs, ages, uncovered_edges, weight_array
+    return (cover_in_C, in_C, dscores, confs, ages,
+            uncovered_edges, weight_array)
 
 
 def main():
@@ -732,7 +768,7 @@ def main():
     """
     weight_limit = 100
     weight_loss_rate = 0.5
-    cut_off_time = 1
+    cut_off_time = 2
     # duration of algorithm in seconds
 
     with open('saved_edges.pkl', 'rb') as f:
