@@ -424,9 +424,9 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
     dscores[vertex] = -dscores[vertex]
     if added:   # If the vertex is added
         for neighbour in neighbour_dict[vertex]:
-            if vertex > neighbour: sorted_edge = vertex,neighbour 
+            if vertex > neighbour: sorted_edge = vertex,neighbour
             else: sorted_edge = neighbour,vertex
-            
+
             if in_C[neighbour]:
                 # In this case, the edge no longer contributes to the DScore
                 # decrease if neighbour is removed. If edge vertex, neighbour
@@ -442,9 +442,9 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
                 dscores[neighbour] += - weight_array[sorted_edge]
     else:       # If the vertex is removed
         for neighbour in neighbour_dict[vertex]:
-            if vertex > neighbour: sorted_edge = vertex,neighbour 
+            if vertex > neighbour: sorted_edge = vertex,neighbour
             else: sorted_edge = neighbour,vertex
-            
+
             if in_C[neighbour]:
                 # In this case, the edge starts to contribute negatively to the
                 # DScore decrease if neighbour is removed
@@ -520,24 +520,57 @@ def choose_added_vertex(edge, confs, dscores, ages):
 
     """
 
-    reduced_edge = ()
-    re_dscores = ()
-    re_ages = ()
-    for vertex in edge:
-        if confs[vertex]:
-            reduced_edge = reduced_edge + (vertex,)
-            re_dscores = re_dscores + (dscores[vertex],)
-            re_ages = re_ages + (ages[vertex],)
-    if len(reduced_edge) == 1:
-        vertex = reduced_edge[0]
-    elif dscores[0] > dscores[1]:
-        vertex = reduced_edge[0]
-    elif dscores[1] > dscores[0]:
-        vertex = reduced_edge[1]
-    elif ages[0] > ages[1]:
-        vertex = reduced_edge[0]
+    vertex0, vertex1 = edge
+    conf_change0, conf_change1 = confs[vertex0], confs[vertex1]
+
+    assert conf_change0 or conf_change1
+    if not (conf_change0 and conf_change1):
+        if conf_change0:
+            vertex = vertex0
+        if conf_change1:
+            vertex = vertex1
+    elif dscores[vertex0] > dscores[vertex1]:
+        vertex = vertex0
+    elif dscores[vertex1] > dscores[vertex0]:
+        vertex = vertex1
+    elif ages[vertex0] > ages[vertex1]:
+        vertex = vertex0
     else:
-        vertex = reduced_edge[1]
+        vertex = vertex1
+    assert dscores[vertex] >= 0
+    return vertex
+
+
+def select_removed_vertex(in_C, dscores, V, ages):
+    """
+    select a vertex with the highest dscore from C
+
+    Parameters
+    ----------
+    in_C : TYPE
+        DESCRIPTION.
+    dscores : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    vertex : int
+        integer with highest dscore
+
+    """
+    vertices_in_C = list(itertools.compress(V, in_C))
+    C_dscores = list(itertools.compress(dscores, in_C))
+    max_dscore = max(C_dscores)
+    maxima = [vertex for vertex in vertices_in_C if
+              dscores[vertex] == max_dscore]
+
+    ages_maxima = [ages[vertex] for vertex in maxima]
+    max_age = max(ages_maxima)
+    oldest_maxima = [vertex for vertex in maxima if ages[vertex] == max_age]
+
+    vertex = random.choice(oldest_maxima)
+    assert dscores[vertex] <= 0
+    assert in_C[vertex] is True
     return vertex
 
 
@@ -562,34 +595,34 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     10  remove a vertex with the highest dscore from C;
     11  continue;
     12 choose a vertex u ∈ C with the highest dscore, breaking
-        ties in favor of the oldest one; to be tested and age implemented
+        ties in favor of the oldest one;
     13 C := C\{u}, confChange(u) := 0, confChange(z) := 1 for each z ∈ N(u);
     14 choose an uncovered edge e randomly;
     15 choose a vertex v ∈ e such that confChange(v) = 1 with higher dscore,
     breaking ties in favor of the older one; To Break ties
-    16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);  check
-    17 w(e) := w(e) + 1 for each uncovered edge e;  check
-    18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
-    19 return C∗; check
-    20 end check
+    16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);
+    17 w(e) := w(e) + 1 for each uncovered edge e;
+    18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e;
+    19 return C∗;
+    20 end
 
     Parameters
     ----------
     E : List of tuples (vertex1, vertex2), vertices positive integers.
         Contains all edges of graph G
-    V : list of vertices, positive integers. 
+    V : list of vertices, positive integers.
         Contains all vertices of graph G
     neighbour_dict : dictionary
         key: vertices, value: list of all neighbours of vertex in graph G
-    graph_array : len(V) x len(V) numpy array of bool. 
+    graph_array : len(V) x len(V) numpy array of bool.
         graph_array[vertex1, vertex2] True if (vertex1, vertex2) is an edge
     cut_off_time : float or int
-        Time the while loop runs before it stops, if it does not find a 
+        Time the while loop runs before it stops, if it does not find a
         solution
     weight_limit : int
         If average weight > weight limit, weight reduced by factor
     weight_loss_rate : float between 0,1
-        determines how much weight is lost at once. 
+        determines how much weight is lost at once.
 
     Returns
     -------
@@ -607,9 +640,9 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
         ages[vertex] is #loops since last change to vertex.
     uncovered_edges : list tuples (vertex1, vertex2)
         Contains all edges not covered by C
-    weight_array : numpy array of integers of size len(V) x len(V) 
+    weight_array : numpy array of integers of size len(V) x len(V)
         weight_array[(vertex1, vertex2)] is edge weight of edge vertex1>vertex2
-        If edge not in E, it is 0. 
+        If edge not in E, it is 0.
     """
 
     print('Building state tracking structures')
@@ -621,7 +654,7 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
 
     # 4 initialize the confChange array as an all-1 array;
     confs = [bool(1)]*len(V)
-    
+
     # initialize weight_array
     weight_array = np.zeros((len(V), len(V)), dtype=int)
     for vertex1 in V:
@@ -641,9 +674,9 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     counter_end = 0
     cover_counter = 0
     print('Starting Loop')
-    InitialTime = time.time()
+    initial_time = time.time()
     # 7 while elapsed time < cutoff and MVC not yet obtained do
-    while time.time() - InitialTime < cut_off_time and cover_counter < 13:
+    while time.time() - initial_time < cut_off_time and cover_counter < 13:
         counter_start += 1
         """
         for boolean in in_C:
@@ -657,30 +690,21 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
         """
         # 8   if there is no uncovered edge then
         if not uncovered_edges:
-            print(time.time() - InitialTime,
+            print(time.time() - initial_time,
                   ' Removing vertex number', cover_counter)
-            # If C is empty, we cannot remove a vertex and hence the loop is
-            # ended. This could only happen if a catastrophe occured.
+            # If C is empty, we cannot select a vertex, this should not happen.
             if not any(in_C):
-                print(time.time() - InitialTime)
-                print('Catastrophe')
-                break
+                print(time.time() - initial_time)
+                assert in_C
+                
             # 9   C∗ := C;
-
             cover_in_C = copy.deepcopy(in_C)
+            
             # 10  remove a vertex with the highest dscore from C;
-
-            # Find a rendom vertex with max DScore in C
-            C_indices = list(itertools.compress(range(len(in_C)), in_C))
-            C_dscores = list(itertools.compress(dscores, in_C))
-            max_dscore = max(C_dscores)
-            sub_index_max = random.choice([index for index in
-                                           range(len(C_dscores))
-                                           if C_dscores[index] == max_dscore])
-            vertex = C_indices[sub_index_max]
-            assert dscores[vertex] <= 0
-            assert in_C[vertex] is True
+            vertex = select_removed_vertex(in_C, dscores, V, ages)
             in_C[vertex] = False
+
+            # update dscores, uncovered edges, vertex age
             ages[vertex] = int(0)
             dscores = update_dscore_local(dscores, in_C, weight_array,
                                           neighbour_dict, vertex, added=False)
@@ -693,29 +717,21 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
 
         # 12 choose a vertex u ∈ C with the highest dscore, breaking
         # ties in favor of the oldest one; to be tested and age implemented
-        C_indices = list(itertools.compress(range(len(in_C)), in_C))
-        C_dscores = list(itertools.compress(dscores, in_C))
-        max_dscore = max(C_dscores)
-        sub_index_max = random.choice([index for index in range(len(C_dscores))
-                                       if C_dscores[index] == max_dscore])
-        vertex = C_indices[sub_index_max]
+        vertex = select_removed_vertex(in_C, dscores, V, ages)
 
         # 13 C := C\{u}, confChange(u) := 0 and confChange(z) := 1
         # for each z ∈ N(u);
-        assert dscores[vertex] <= 0
-        assert in_C[vertex] is True
         in_C[vertex] = False
-
         confs[vertex] = False
-        ages[vertex] = int(0)
         for neighbour in neighbour_dict[vertex]:
             confs[neighbour] = True
 
+        # update dscores, uncovered_edges, vertex age
         uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
                                            neighbour_dict, added=False)
-
         dscores = update_dscore_local(dscores, in_C, weight_array,
                                       neighbour_dict, vertex, added=False)
+        ages[vertex] = int(0)
 
         # 14 choose an uncovered edge e randomly;
         edge = random.choice(uncovered_edges)
@@ -725,26 +741,29 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
         vertex = choose_added_vertex(edge, confs, dscores, ages)
 
         # 16 C := C ∪ {v}, confChange(z) := 1 for each z ∈ N(v);
-        assert dscores[vertex] >= 0
         in_C[vertex] = True
-        ages[vertex] = int(0)
+
         for neighbour in neighbour_dict[vertex]:
             confs[neighbour] = True
 
+        # update dscores, uncovered_edges, vertex age
+        ages[vertex] = int(0)
         uncovered_edges = update_uncovered(in_C, uncovered_edges, vertex,
                                            neighbour_dict, added=True)
         dscores = update_dscore_local(dscores, in_C, weight_array,
                                       neighbour_dict, vertex, added=True)
-        # 17 w(e) := w(e) + 1 for each uncovered edge e;  check
+
+        # 17 w(e) := w(e) + 1 for each uncovered edge e;
         for edge in uncovered_edges:
             weight_array[edge] += 1
             average_weight += 1/len(E)
-            
+
+        # update dscores, ages
         dscores = weight_update_dscore(uncovered_edges, dscores)
-        for vertex in range(len(ages)):
+        for vertex in V:
             ages[vertex] += 1
-        # 18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
-        
+
+        # 18 if w ≥ γ then w(e) := ρ · w(e) for each edge e;
         if average_weight > weight_limit:
             for edge in E:
                 weight_array[edge] = math.ceil(
@@ -757,6 +776,7 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     else:
         print('Time is out')
 
+    # print statistics
     print('counter_start', counter_start,
           '\n', 'counter_end', counter_end,
           '\n cover_counter', cover_counter)
@@ -783,8 +803,8 @@ def main():
     """
     weight_limit = 100
     weight_loss_rate = 0.5
-    cut_off_time = 2
-    # duration of algorithm in seconds
+    cut_off_time = 3600    # duration of algorithm in seconds
+
 
     with open('saved_edges.pkl', 'rb') as f:
         E = pickle.load(f)
