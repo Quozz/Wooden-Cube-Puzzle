@@ -572,37 +572,41 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
 
     Parameters
     ----------
-    E : TYPE
-        DESCRIPTION.
-    V : TYPE
-        DESCRIPTION.
-    neighbour_dict : TYPE
-        DESCRIPTION.
-    graph_array : TYPE
-        DESCRIPTION.
-    cut_off_time : TYPE
-        DESCRIPTION.
-    weight_limit : TYPE
-        DESCRIPTION.
-    weight_loss_rate : TYPE
-        DESCRIPTION.
+    E : List of tuples (vertex1, vertex2), vertices positive integers.
+        Contains all edges of graph G
+    V : list of vertices, positive integers. 
+        Contains all vertices of graph G
+    neighbour_dict : dictionary
+        key: vertices, value: list of all neighbours of vertex in graph G
+    graph_array : len(V) x len(V) numpy array of bool. 
+        graph_array[vertex1, vertex2] True if (vertex1, vertex2) is an edge
+    cut_off_time : float or int
+        Time the while loop runs before it stops, if it does not find a 
+        solution
+    weight_limit : int
+        If average weight > weight limit, weight reduced by factor
+    weight_loss_rate : float between 0,1
+        determines how much weight is lost at once. 
 
     Returns
     -------
-    cover_in_C : TYPE
-        DESCRIPTION.
-    in_C : TYPE
-        DESCRIPTION.
-    dscores : TYPE
-        DESCRIPTION.
-    confs : TYPE
-        DESCRIPTION.
-    ages : TYPE
-        DESCRIPTION.
-    uncovered_edges : TYPE
-        DESCRIPTION.
-    weight_array : TYPE
-        DESCRIPTION.
+    cover_in_C : list of bools of len(V)
+        cover_in_C[vertex] == True if vertex in minimal vertex covering
+    in_C : list of bools of len(V)
+        cover_in_C[vertex] == True if vertex in C
+    dscores : list of ints of len(V)
+        contains the dscores of all vertices. dscore is heuristic in order
+        to maximise the chance
+        of finding a vertex cover, dscore is maximalised
+    confs : bool
+        If False, may not be added to C.
+    ages : int
+        ages[vertex] is #loops since last change to vertex.
+    uncovered_edges : list tuples (vertex1, vertex2)
+        Contains all edges not covered by C
+    weight_array : numpy array of integers of size len(V) x len(V) 
+        weight_array[(vertex1, vertex2)] is edge weight of edge vertex1>vertex2
+        If edge not in E, it is 0. 
     """
 
     print('Building state tracking structures')
@@ -610,14 +614,19 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
     # 3 initialize edge weights and dscores of vertices;
     dscores = [int(0)]*len(V)
     ages = [int(0)]*len(V)
-    weight_array = np.zeros((len(V), len(V)), dtype=int)
+
 
     # 4 initialize the confChange array as an all-1 array;
     confs = [bool(1)]*len(V)
-    for i in range(len(V)):
-        for j in range(len(V)):
-            if i > j:
-                weight_array[i, j] = int(graph_array[i, j])
+    
+    # initialize weight_array
+    weight_array = np.zeros((len(V), len(V)), dtype=int)
+    for vertex1 in V:
+        for vertex2 in V:
+            if vertex1 > vertex2:
+                weight_array[vertex1, vertex2] = \
+                    int(graph_array[vertex1, vertex2])
+    average_weight = 1
     uncovered_edges = []
 
     # 5 construct C greedily until it is a vertex cover; - just C = V
@@ -726,18 +735,20 @@ def NuMVC(E, V, neighbour_dict, graph_array, cut_off_time, weight_limit,
         # 17 w(e) := w(e) + 1 for each uncovered edge e;  check
         for edge in uncovered_edges:
             weight_array[edge] += 1
+            average_weight += 1/len(E)
+            
         dscores = weight_update_dscore(uncovered_edges, dscores)
         for vertex in range(len(ages)):
             ages[vertex] += 1
-        average_weight = np.sum(weight_array)/len(E)
-
         # 18 if w ≥ γ then w(e) := ⌊ρ · w(e)⌋ for each edge e; check
+        
         if average_weight > weight_limit:
             for edge in E:
                 weight_array[edge] = math.ceil(
                     weight_array[edge]*weight_loss_rate)
                 dscores = globally_update_dscore(
                     dscores, in_C, weight_array, E)
+                average_weight = np.sum(weight_array)/len(E)
                 print('Weights partially forgotten')
         counter_end += 1
     else:
