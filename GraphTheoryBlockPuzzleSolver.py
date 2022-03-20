@@ -424,7 +424,9 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
     dscores[vertex] = -dscores[vertex]
     if added:   # If the vertex is added
         for neighbour in neighbour_dict[vertex]:
-            sorted_edge = tuple(sorted((vertex, neighbour), reverse=True))
+            if vertex > neighbour: sorted_edge = vertex,neighbour 
+            else: sorted_edge = neighbour,vertex
+            
             if in_C[neighbour]:
                 # In this case, the edge no longer contributes to the DScore
                 # decrease if neighbour is removed. If edge vertex, neighbour
@@ -440,7 +442,9 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
                 dscores[neighbour] += - weight_array[sorted_edge]
     else:       # If the vertex is removed
         for neighbour in neighbour_dict[vertex]:
-            sorted_edge = tuple(sorted((vertex, neighbour), reverse=True))
+            if vertex > neighbour: sorted_edge = vertex,neighbour 
+            else: sorted_edge = neighbour,vertex
+            
             if in_C[neighbour]:
                 # In this case, the edge starts to contribute negatively to the
                 # DScore decrease if neighbour is removed
@@ -467,7 +471,6 @@ def update_dscore_local(dscores, in_C, weight_array, neighbour_dict, vertex,
     # of neighbours. This is rather large.
     # On the other hand, we may use the fact that flipping the DScore change
     return dscores
-
 
 def weight_update_dscore(uncovered_edges, dscores):
     """
